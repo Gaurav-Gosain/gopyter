@@ -68,6 +68,10 @@ var Version = "dev"
 // ErrCompile is returned when the cell fails to compile.
 var ErrCompile = errors.New("compilation failed")
 
+// ErrFailed is returned when a cell failed after its error was emitted,
+// as an Error event (a glr cell's error, for one).
+var ErrFailed = errors.New("cell failed")
+
 // ErrInterrupted is returned when an execution is cancelled.
 var ErrInterrupted = errors.New("interrupted")
 

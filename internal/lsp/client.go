@@ -1,5 +1,5 @@
 // Package lsp is a minimal Language Server Protocol client, sufficient to
-// drive gopls for code completion.
+// drive gopls and golars-lsp for completion, symbol info and diagnostics.
 package lsp
 
 import (
@@ -46,6 +46,11 @@ type response struct {
 // to send back (nil means JSON null).
 type Handler func(method string, params json.RawMessage) any
 
+// NotifyHandler receives notifications from the server, such as
+// textDocument/publishDiagnostics. It runs on the reading goroutine, so it
+// must not block.
+type NotifyHandler func(method string, params json.RawMessage)
+
 // Client is a connection to a language server subprocess.
 type Client struct {
 	cmd     *exec.Cmd
@@ -55,12 +60,18 @@ type Client struct {
 	pmu     sync.Mutex
 	pending map[int64]chan response
 	handler Handler
+	notify  NotifyHandler
 	done    chan struct{}
 	closed  atomic.Bool
 }
 
 // Start launches a language server and begins reading its messages.
 func Start(cmd *exec.Cmd, handler Handler) (*Client, error) {
+	return StartNotify(cmd, handler, nil)
+}
+
+// StartNotify is Start with a handler for the server's notifications.
+func StartNotify(cmd *exec.Cmd, handler Handler, notify NotifyHandler) (*Client, error) {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -73,7 +84,7 @@ func Start(cmd *exec.Cmd, handler Handler) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		cmd: cmd, w: stdin, handler: handler,
+		cmd: cmd, w: stdin, handler: handler, notify: notify,
 		pending: map[int64]chan response{},
 		done:    make(chan struct{}),
 	}
@@ -110,7 +121,10 @@ func (c *Client) readLoop(r *bufio.Reader) {
 			}
 			_ = c.send(message{ID: msg.ID, Result: mustJSON(result)})
 		case msg.Method != "":
-			// Notification (logs, diagnostics, progress): ignored.
+			// Notification (logs, diagnostics, progress).
+			if c.notify != nil {
+				c.notify(msg.Method, msg.Params)
+			}
 		case msg.ID != nil:
 			id, err := strconv.ParseInt(strings.Trim(string(*msg.ID), `"`), 10, 64)
 			if err != nil {

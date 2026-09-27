@@ -68,6 +68,12 @@ type Request struct {
 	Row, Col int  // cursor, 0-based rune column
 	Manual   bool // explicitly requested by the user
 	Trigger  rune // character that triggered completion, if any
+	// Lang is the cell's language ("go" or "glr").
+	Lang string
+	// Before is source that precedes the cell, for languages whose
+	// state isn't in the kernel: for a glr cell, the earlier glr cells,
+	// so frames and columns they load are known. It ends in a newline.
+	Before string
 }
 
 // Engine produces completions for notebook cells.
