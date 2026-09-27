@@ -340,9 +340,27 @@ func TestFixIgnoresProjectKitSetup(t *testing.T) {
 
 func TestTrimContextKeepsNearestCells(t *testing.T) {
 	big := strings.Repeat("x", maxContext/2+1)
-	cells := []Cell{{"In[1]", big}, {"In[2]", big}, {"In[3]", "y := 1"}}
+	cells := []Cell{{Name: "In[1]", Source: big}, {Name: "In[2]", Source: big}, {Name: "In[3]", Source: "y := 1"}}
 	got := trimContext(cells)
 	if len(got) != 2 || got[0].Name != "In[2]" {
 		t.Errorf("kept %d cells starting at %s", len(got), got[0].Name)
+	}
+}
+
+func TestGLRPrompts(t *testing.T) {
+	req := Request{Name: "In[2]", Lang: "glr", Source: "frob", Error: "In[2]:1: unknown command .frob",
+		Before:       []Cell{{Name: "In[1]", Source: "load a.csv", Lang: "glr"}, {Name: "In[0]", Source: "x := 1"}},
+		Declarations: []string{"x"}, GoVersion: "go1.27"}
+	p := fixPrompt(req)
+	for _, want := range []string{"```glr\nfrob\n```", "```glr\nload a.csv\n```", "```go\nx := 1\n```"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("fix prompt lacks %q:\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, "Identifiers the notebook") {
+		t.Errorf("glr prompt lists Go declarations:\n%s", p)
+	}
+	if !strings.Contains(glrFixSystemPrompt, "%export NAME") || !strings.Contains(glrEditSystemPrompt, "golars") {
+		t.Error("glr system prompts")
 	}
 }

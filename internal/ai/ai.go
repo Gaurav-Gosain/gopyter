@@ -31,6 +31,7 @@ type Checker interface {
 type Cell struct {
 	Name   string // as in error positions, e.g. "In[2]"
 	Source string
+	Lang   string // "go" (the default) or "glr"
 }
 
 // Request describes a cell for the model to change: a failing cell to fix,
@@ -38,6 +39,10 @@ type Cell struct {
 type Request struct {
 	CellID string
 	Name   string // as in error positions, e.g. "In[3]"
+	// Lang is the cell's language: "go" (the default) or "glr", a
+	// golars script. Check lints glr cells with golars instead of
+	// compiling them.
+	Lang   string
 	Source string // may be empty when editing: the model writes the cell
 	// Error is the error output of the cell's last run, if it failed.
 	Error string

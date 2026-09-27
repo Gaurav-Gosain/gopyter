@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/gopyter/internal/ai"
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -224,7 +226,10 @@ func (m *Model) startTask(i int, instruction string) tea.Cmd {
 		run = m.assistant.Edit
 	}
 	var check ai.Checker
-	if m.k != nil {
+	switch {
+	case req.Lang == string(notebook.GLR) && m.glr != nil:
+		check = glrChecker{k: m.glr, before: m.glrBefore(c)}
+	case req.Lang != string(notebook.GLR) && m.k != nil:
 		check = m.k
 	}
 	go func() {
@@ -237,6 +242,18 @@ func (m *Model) startTask(i int, instruction string) tea.Cmd {
 		ch <- taskEvent{prop: p, err: err, done: true}
 	}()
 	return tea.Batch(waitTask(seq, ch), m.startSpinner())
+}
+
+// glrChecker checks proposals for a glr cell with golars lint, in the
+// context of the notebook's earlier glr cells.
+type glrChecker struct {
+	k      *glr.Kernel
+	before string
+}
+
+func (g glrChecker) Check(ctx context.Context, _, name, src string) (kernel.CheckResult, error) {
+	_, body := notebook.Resolve(src, notebook.GLR)
+	return g.k.Check(ctx, g.before, name, body)
 }
 
 // cellLabel names cell i for the user: In[n] like its prompt, or its
@@ -255,7 +272,7 @@ func (m *Model) aiRequest(i int) ai.Request {
 	if c.count > 0 {
 		name = "In[" + itoa(c.count) + "]"
 	}
-	req := ai.Request{CellID: c.id, Name: name, Source: c.ed.Value()}
+	req := ai.Request{CellID: c.id, Name: name, Source: c.ed.Value(), Lang: string(c.runLang(c.ed.Value()))}
 	for _, p := range m.cells[:i] {
 		if p.kind != notebook.Code || strings.TrimSpace(p.ed.Value()) == "" {
 			continue
@@ -264,7 +281,7 @@ func (m *Model) aiRequest(i int) ai.Request {
 		if p.ran && p.count > 0 {
 			name = "In[" + itoa(p.count) + "]"
 		}
-		req.Before = append(req.Before, ai.Cell{Name: name, Source: p.ed.Value()})
+		req.Before = append(req.Before, ai.Cell{Name: name, Source: p.ed.Value(), Lang: string(p.runLang(p.ed.Value()))})
 	}
 	if c.status == statusFailed {
 		var errs strings.Builder

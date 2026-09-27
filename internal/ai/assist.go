@@ -78,6 +78,31 @@ If the request needs identifiers from an earlier cell that hasn't run, don't cal
 
 Submit the complete new cell with the ` + submitTool + ` tool. It compiles the cell together with the rest of the notebook, without running it, and returns any errors: keep fixing and submitting until it compiles. If the request is unclear, or can't be done inside this cell, don't call the tool; explain why in one or two sentences.`
 
+// glrRules explains glr cells, golars scripts, for the glr prompts.
+const glrRules = `How glr cells work:
+- A glr cell is a golars script (https://github.com/Gaurav-Gosain/golars): one command per line, like a polars pipeline typed into a REPL. A trailing \ continues a line; # starts a comment outside "double-quoted strings". The leading dot of a command (.load) is optional.
+- Cells share one golars session: frames loaded or stashed in earlier glr cells still exist. There is one focused frame; pipeline commands (filter, select, sort, groupby, with, join, limit...) add to its lazy pipeline.
+- Common commands: load PATH [as NAME]; use NAME (focus a copy of a named frame); stash NAME (materialize the focus under NAME); filter COL OP VALUE [and|or ...] with ==, !=, <, <=, >, >=, is_null, is_not_null, contains, starts_with; select a,b; drop a,b; sort COL [asc|desc]; limit N; head [N]; tail [N]; show; schema; describe; groupby KEYS COL:AGG[:ALIAS]... (sum, mean, min, max, count, median, std, first, last); join NAME|PATH on KEY [inner|left|cross]; with NAME = EXPR (arithmetic on columns, col("x").abs() style methods); rename OLD as NEW; cast COL DTYPE; fill_null VALUE; drop_null [cols]; unique; save PATH.
+- The focused frame is displayed at the end of a cell that changed it; show, head and tail print tables.
+- gopyter directives, one per line: %export NAME saves the focused frame for Go cells, %import NAME loads a frame a Go cell exported, as the named frame NAME.
+- Error positions look like In[3]:2 (cell, line).`
+
+const glrFixSystemPrompt = `You fix golars scripts in glr cells of gopyter, a Jupyter-style terminal notebook.
+
+` + glrRules + `
+
+Fix the failing cell with the smallest change that keeps what the user meant. You can only change this cell, not the earlier ones. If the error is only there because an earlier cell hasn't run, don't call the tool: say which cell to run first.
+
+Submit the complete corrected cell with the ` + submitTool + ` tool. It lints the cell with golars (unknown commands, frames used before they exist, unbalanced quotes), without running it: keep fixing and submitting until it passes. Column names are only checked when the cell runs, so take them from the earlier cells. If the problem can't be fixed inside this cell, don't call the tool; explain why in one or two sentences.`
+
+const glrEditSystemPrompt = `You write and change golars scripts in glr cells of gopyter, a Jupyter-style terminal notebook, as the user asks.
+
+` + glrRules + `
+
+Do what the user asks, in this cell only: you can't change the earlier cells. If the cell is empty, write it from scratch. Leave the parts of the cell the request isn't about as they are, and build on the frames the earlier cells load and stash. Keep scripts short, with comments only where they help.
+
+Submit the complete new cell with the ` + submitTool + ` tool. It lints the cell with golars without running it: keep fixing and submitting until it passes. If the request is unclear, or can't be done inside this cell, don't call the tool; explain why in one or two sentences.`
+
 type submitInput struct {
 	Source      string `json:"source" description:"The complete new cell source."`
 	Explanation string `json:"explanation" description:"One short sentence saying what was wrong or what changed."`
@@ -89,7 +114,11 @@ type submitInput struct {
 // progress receives short status updates, from other goroutines. Cancel
 // ctx to abort.
 func (a *Assistant) Fix(ctx context.Context, req Request, check Checker, progress func(string)) (*Proposal, error) {
-	return a.propose(ctx, fixSystemPrompt, fixPrompt(req), "fix", req, check, progress)
+	system := fixSystemPrompt
+	if req.Lang == "glr" {
+		system = glrFixSystemPrompt
+	}
+	return a.propose(ctx, system, fixPrompt(req), "fix", req, check, progress)
 }
 
 // Edit asks the model to change req's cell, or write it when it's empty,
@@ -98,7 +127,11 @@ func (a *Assistant) Edit(ctx context.Context, req Request, check Checker, progre
 	if strings.TrimSpace(req.Instruction) == "" {
 		return nil, errors.New("say what the cell should do")
 	}
-	return a.propose(ctx, editSystemPrompt, editPrompt(req), "change", req, check, progress)
+	system := editSystemPrompt
+	if req.Lang == "glr" {
+		system = glrEditSystemPrompt
+	}
+	return a.propose(ctx, system, editPrompt(req), "change", req, check, progress)
 }
 
 // propose runs one agent turn that ends when the model submits a cell that
@@ -183,7 +216,7 @@ func (a *Assistant) explain(err error) error {
 func fixPrompt(req Request) string {
 	var b strings.Builder
 	writeContext(&b, req)
-	writeBlock(&b, "The failing cell, "+req.Name+":", "go", req.Source)
+	writeBlock(&b, "The failing cell, "+req.Name+":", fence(req.Lang), req.Source)
 	writeBlock(&b, "Its error:", "", req.Error)
 	return b.String()
 }
@@ -197,7 +230,7 @@ func editPrompt(req Request) string {
 		b.WriteString(req.Name)
 		b.WriteString(", is empty.\n\n")
 	} else {
-		writeBlock(&b, "The cell to change, "+req.Name+":", "go", req.Source)
+		writeBlock(&b, "The cell to change, "+req.Name+":", fence(req.Lang), req.Source)
 	}
 	if req.Error != "" {
 		writeBlock(&b, "Its last run failed with:", "", req.Error)
@@ -217,8 +250,11 @@ func writeContext(b *strings.Builder, req Request) {
 	if before := trimContext(req.Before); len(before) > 0 {
 		b.WriteString("Earlier code cells, oldest first:\n\n")
 		for _, c := range before {
-			writeBlock(b, c.Name+":", "go", c.Source)
+			writeBlock(b, c.Name+":", fence(c.Lang), c.Source)
 		}
+	}
+	if req.Lang == "glr" {
+		return // Go declarations don't matter to a glr cell
 	}
 	if len(req.Declarations) > 0 {
 		b.WriteString("Identifiers the notebook currently declares: ")
@@ -227,6 +263,14 @@ func writeContext(b *strings.Builder, req Request) {
 	} else {
 		b.WriteString("The notebook declares nothing yet: no earlier cell has run in this session.\n\n")
 	}
+}
+
+// fence is the code fence language of a cell language.
+func fence(lang string) string {
+	if lang == "" {
+		return "go"
+	}
+	return lang
 }
 
 // trimContext keeps the nearest cells whose sources fit in maxContext.

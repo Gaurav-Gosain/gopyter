@@ -207,3 +207,29 @@ func TestMissingGolars(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+func TestLintErrors(t *testing.T) {
+	out := "/t/cell.glr:1: stash \"a\" is never used\n/t/cell.glr:3: unknown command \"frob\"\n/t/cell.glr:5: use \"x\" with no prior stash or load as\nother noise\n"
+	got := lintErrors(out, "/t/cell.glr", "In[2]", 2, 2)
+	if got != "In[2]:1: unknown command \"frob\"" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// Check lints with the real golars when it is installed.
+func TestCheck(t *testing.T) {
+	if _, err := FindGolars(); err != nil || testing.Short() {
+		t.Skip("golars not found")
+	}
+	k := &Kernel{BridgeDir: t.TempDir()}
+	r, err := k.Check(context.Background(), "load a.csv\nstash base\n", "In[2]", "use base\nfrob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Errors != `In[2]:2: unknown command "frob"` {
+		t.Fatalf("errors %q", r.Errors)
+	}
+	if r, err := k.Check(context.Background(), "", "In[1]", "load a.csv\n%export a"); err != nil || !r.OK() {
+		t.Fatalf("%+v %v", r, err)
+	}
+}
