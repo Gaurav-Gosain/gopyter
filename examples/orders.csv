@@ -1,0 +1,15 @@
+order_id,customer,region,product,qty,unit_price,discount
+1,c01,eu,cable,3,4.50,0.05
+2,c02,us,adapter,1,9.99,
+3,c03,us,dock,2,120.00,0.10
+4,c01,eu,dock,1,120.00,
+5,c04,apac,cable,10,4.20,0.15
+6,c05,us,cable,4,4.50,
+7,c02,us,monitor,1,249.00,0.05
+8,c06,eu,adapter,2,9.49,0.10
+9,c03,us,cable,6,4.50,0.05
+10,c07,apac,dock,1,118.00,
+11,c04,apac,monitor,2,239.00,0.10
+12,c08,eu,monitor,1,255.00,
+13,c05,us,adapter,3,9.99,0.05
+14,c06,eu,cable,8,4.40,0.10
