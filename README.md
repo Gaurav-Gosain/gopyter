@@ -23,6 +23,74 @@ so GoNB notebooks run in gopyter too. See [Acknowledgements](#acknowledgements).
 - **Headless runs** for scripts and CI: `gopyter run notes.ipynb --save`
 - **Live reload.** Edits made to the notebook file by other programs show up automatically
 - **Optional AI.** Off until you pick a model; then `e` asks it to write or change a cell as you describe, and `f` to fix a failing one. Every proposal is checked to compile, and you see the diff before anything changes
+- **golars DataFrames.** glr cells run [golars](https://github.com/Gaurav-Gosain/golars) scripts next to Go cells, and golars DataFrames show as tables drawn in your theme (see [golars](#golars))
+
+## golars
+
+This fork makes gopyter a notebook for [golars](https://github.com/Gaurav-Gosain/golars),
+a pure-Go DataFrame library modeled on polars, both for its `.glr` script
+language and for Go code that uses the library.
+
+```sh
+go install github.com/Gaurav-Gosain/golars/cmd/golars@latest       # glr cells
+go install github.com/Gaurav-Gosain/golars/cmd/golars-lsp@latest   # optional: completion, docs, diagnostics
+gopyter --lang glr sales.ipynb                                      # a new golars notebook
+```
+
+Then type a script and press `ctrl+r`:
+
+```glr
+load orders.csv
+filter discount is_not_null and qty > 1
+groupby region unit_price:sum:total
+sort total desc
+```
+
+The cell's frame is drawn as a table, with polars' dtype row and `shape:
+(h, w)` footer, fitted to the terminal, and saved as HTML so the notebook
+also reads well in JupyterLab.
+
+- **glr cells** run in one long-lived `golars kernel-host`, like
+  golars-kernel in Jupyter, so frames persist: `load` in one cell, `filter`
+  in the next, branch with `stash NAME` / `use NAME`. Paths are relative to
+  the notebook. `ctrl+c` stops a cell by restarting golars (its frames are
+  lost), and `R` restarts it too.
+- **Cell languages.** A glr notebook has golars-kernel's kernelspec, so it
+  opens in JupyterLab with `golars-kernel`. Any notebook can mix languages:
+  `l` in command mode switches a code cell between go and glr (the choice is
+  saved in the cell's metadata), and a first line of `%%glr` or `%%go` does
+  the same for one cell. The cell's border shows its language.
+- **Editing glr.** Syntax highlighting, and with `golars-lsp`: completion of
+  commands, frames and the columns of files earlier cells loaded, docs on
+  `alt+k`, and diagnostics under the cell. Without it, commands still
+  complete.
+- **golars in Go cells.** `import "github.com/Gaurav-Gosain/golars"`: a
+  trailing DataFrame or Series (or `nb.Display(df)`) is drawn as a table and
+  saved as `text/html`. Set `GOLARS_DIR=/path/to/golars` to build against a
+  local checkout, offline.
+- **Between the two.** In a glr cell, `%export NAME` saves the focused frame
+  and `%import NAME` loads one as the named frame `NAME`. Go cells read and
+  write the same Arrow IPC files with `golars.ReadIPC(nb.BridgePath("NAME"))`
+  and `golars.WriteIPC(df, nb.BridgePath("NAME"))`.
+- **Scripts.** `gopyter script.glr` offers to import a script as a notebook
+  (one cell per blank-line separated block, leading comments as markdown);
+  `gopyter run script.glr` runs it headless.
+- **Headless.** `gopyter run` runs glr and mixed notebooks, draws their tables
+  and saves them with `--save`. A failing glr cell stops the run, since later
+  cells build on it.
+- **AI.** `e` and `f` work on glr cells too; proposals are checked with
+  `golars lint`.
+
+gopyter finds `golars` like golars-kernel does: `$GOLARS_BIN`, next to the
+gopyter binary, then `$PATH`. `golars-lsp` is found through `$GOLARS_LSP`,
+next to `$GOLARS_BIN` or gopyter, then `$PATH`. Tables come back as data from
+golars versions whose kernel-host supports structured replies; with older
+ones gopyter shows golars' HTML and text instead. The golars changes this
+needs are in [`golars-patches`](golars-patches).
+
+Try `gopyter examples/golars.ipynb` (a glr notebook) and
+`GOLARS_DIR=~/src/golars gopyter examples/golars-go.ipynb` (Go and golars,
+and frames passed both ways).
 
 ## Install
 
@@ -88,6 +156,8 @@ cells. More example notebooks show off the rest:
 | `examples/data.ipynb`        | variables across cells, tables, charts, HTML, `nb.Cache`     |
 | `examples/widgets.ipynb`     | sliders, buttons and selects driving live output             |
 | `examples/magics.ipynb`      | `!` commands, `%%writefile`, `%%sh`, flags, `%test`, `%goflags` |
+| `examples/golars.ipynb`      | a glr notebook: load, filter, group, join and branch golars frames |
+| `examples/golars-go.ipynb`   | golars in Go cells, and frames between Go and glr cells      |
 
 They run headless too: `gopyter run examples/images.ipynb`.
 
@@ -194,6 +264,7 @@ Cell magics must be the first line of a cell and take the rest of it:
 | `%%writefile [-a] file` | write the cell to a file (`-a` appends)     |
 | `%%bash`, `%%sh`        | run the cell as a shell script              |
 | `%%script cmd`          | run `cmd` with the cell as its input (e.g. `%%script python3`) |
+| `%%glr`, `%%go`         | run the cell as a golars script, or as Go (see [golars](#golars)) |
 
 Files and scripts are relative to the directory programs run in, so a program
 can read what `%%writefile` wrote. Commands can also be written as
@@ -269,6 +340,7 @@ mode** (green) edits text. Press `?` for the full list.
 | `dd` / `z`                   | delete / undo delete                     |
 | `x` `c` `v`, `K` / `J`       | cut / copy / paste, move cell up / down  |
 | `m` / `y` (`ctrl+t` editing) | convert to markdown / code               |
+| `l`                          | switch a code cell between go and glr    |
 | `o` / `O`                    | fold long output / clear output          |
 | `ctrl+s` / `q`               | save / quit                              |
 | `T`                          | pick a color theme                       |
@@ -441,6 +513,10 @@ gopyter's own parts (the terminal UI, drawing images, HTML and widgets as text,
 the `nb` package, variables kept across cells, completion, AI) are separate
 work. To run Go notebooks in Jupyter itself, use GoNB.
 
+gopyter itself is by [mark3labs](https://github.com/mark3labs/gopyter); this
+fork adds golars support. glr cells run through golars' own `kernel-host`
+and `golars-lsp`, the same pieces golars-kernel uses in Jupyter.
+
 ## Development
 
 ```sh
@@ -451,7 +527,9 @@ go build -tags noai .      # without AI support: no kit dependency, a much small
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture, conventions and testing
-workflow. Releases are cut by pushing a `v*` tag; GoReleaser builds and
+workflow. The golars tests and examples run when `golars` is found (and,
+for Go cells importing golars, `GOLARS_DIR` is set); otherwise they are
+skipped. Releases are cut by pushing a `v*` tag; GoReleaser builds and
 publishes the binaries.
 
 ## License

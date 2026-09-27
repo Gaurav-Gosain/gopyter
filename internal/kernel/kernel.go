@@ -1159,7 +1159,8 @@ const MagicHelp = "## Cell commands\n\n" +
 	"| Cell magic | Description |\n|---|---|\n" +
 	"| `%%writefile [-a] file` | write the cell to a file (`-a` appends) |\n" +
 	"| `%%bash`, `%%sh` | run the cell as a shell script |\n" +
-	"| `%%script cmd` | run `cmd` with the cell as its input, e.g. `%%script python3` |\n\n" +
+	"| `%%script cmd` | run `cmd` with the cell as its input, e.g. `%%script python3` |\n" +
+	"| `%%glr`, `%%go` | run the cell as a golars script (glr), or as Go; `l` in command mode switches a cell for good |\n\n" +
 	"These commands follow [GoNB](https://github.com/janpfeifer/gonb)'s, so its notebooks run unchanged; " +
 	"magics can also be written as `//gonb:%...`, as in GoNB. " +
 	"Files and scripts are relative to the directory programs run in.\n\n" +

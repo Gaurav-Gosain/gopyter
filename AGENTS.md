@@ -3,6 +3,11 @@
 Guidance for AI coding agents working on **gopyter**, a Jupyter-style notebook
 for Go that runs in the terminal. For the user-facing overview, see `README.md`.
 
+This repository is a fork of [mark3labs/gopyter](https://github.com/mark3labs/gopyter)
+that adds [golars](https://github.com/Gaurav-Gosain/golars) support: glr
+(golars script) cells, golars tables, and Go cells using golars. Keep the
+credit to mark3labs and GoNB intact.
+
 ## Project overview
 
 - Single Go module `github.com/Gaurav-Gosain/gopyter` (Go 1.27). The CLI entry
@@ -21,7 +26,9 @@ for Go that runs in the terminal. For the user-facing overview, see `README.md`.
 | `internal/kernel`   | splits cells into decls/statements, persists decls, generates, builds and runs programs; `Check` compiles a cell without running it |
 | `internal/ai`       | optional AI features on the kit SDK: model setting, isolated agents, the cell fix and edit loop |
 | `internal/config`   | user settings (theme, vim, AI model) persisted as JSON in the user config dir |
-| `internal/notebook` | `.ipynb` (nbformat v4) read/write with a GoNB kernelspec                  |
+| `internal/notebook` | `.ipynb` (nbformat v4) read/write with a GoNB kernelspec; cell languages (`lang.go`) and golars table outputs |
+| `internal/glr`      | glr cells: the `golars kernel-host` client (`host.go`) and kernel (`kernel.go`), `golars lint` checks, the chroma lexer, golars-lsp completion/hover/diagnostics, `.glr` import |
+| `internal/table`    | golars table payload (`application/vnd.golars.table+json`) and its terminal renderer |
 | `internal/runner`   | headless execution for `gopyter run`                                      |
 | `internal/markdown` | renders markdown with herald-md in the palette's colors, wrapped to a width (cells, outputs, info popup, `run`) |
 | `internal/termimg`  | draws images as half-block text for image outputs (TUI and `run`)        |
@@ -32,6 +39,7 @@ for Go that runs in the terminal. For the user-facing overview, see `README.md`.
 | `internal/ui`       | the Bubble Tea app: editor, cells, mouse zones, dialogs, completion popup |
 | `skills/gopyter`    | agent skill (`SKILL.md`, installable with `npx skills add Gaurav-Gosain/gopyter`); keep it in sync with user-visible behavior |
 | `scripts`           | tests for `install.sh` (run against a fake release; checked against `.goreleaser.yaml`) |
+| `golars-patches`    | golars-side changes this fork relies on, as patches against golars (not applied here) |
 
 ### Credit to GoNB
 
@@ -155,6 +163,66 @@ concatenation in WriteString") count as issues to fix too.
   sub-package. It copies chunks verbatim at their original columns, so cursor
   positions map back exactly. Preserve that property.
 
+### Cell languages (`internal/notebook/lang.go`)
+
+- A code cell is `go` or `glr`. The notebook's default comes from its
+  kernelspec: golars-kernel's (`name: golars`, exactly what `golars-kernel
+  install` writes, with its `language_info`) means glr; anything else means
+  Go. `NewLang(GLR)` writes that kernelspec.
+- A cell in the other language stores `{"gopyter": {"language": "glr"}}` in
+  its metadata (`SetCellLang` removes the entry when it matches the default).
+  A first line `%%glr` / `%%go` wins over both. `Resolve` returns the language
+  and the source with that line blanked, so error lines still match the cell.
+  Every execution path (UI, runner, completion, AI) goes through `Resolve`.
+- In the UI, `Cell.lang` is the stored language and `Cell.runLang(src)` the
+  effective one; `syncLang` keeps the editor's highlighting in step. New
+  cells take the selected code cell's language (`newCodeCell`).
+
+### glr kernel (`internal/glr`)
+
+- `Kernel` starts `golars kernel-host` (found by `FindGolars`: `$GOLARS_BIN`,
+  next to gopyter, `$PATH`) on the first glr cell, in the notebook's
+  directory, with `NO_COLOR=1`. Requests are NDJSON with `"structured":
+  true`; replies carry `outputs` (stdout text and tables in order) and
+  `table` (the auto-displayed frame). An older golars ignores the flag, and
+  its `text`/`html` are shown instead. Keep these fields in sync with golars'
+  `cmd/golars/subcmd_kernel_host.go`.
+- Cancelling the context kills the host: `Execute` returns
+  `kernel.ErrInterrupted` and the next cell starts a new host and says the
+  frames are gone. A glr error is emitted as an `Error` event and
+  `Execute` returns `kernel.ErrFailed`; the UI and runner stop a run of all
+  cells there, since later cells build on the state.
+- `%export NAME` / `%import NAME` lines become `save`/`load ... as NAME` of
+  `NAME.arrow` in `kernel.Kernel.BridgeDir()`, which Go cells reach with
+  `nb.BridgePath` (env `GOPYTER_BRIDGE_DIR`). glr paths can't contain
+  spaces, so the directory can't either. Paths into it are shown as
+  `bridge:NAME.arrow`.
+- Tables become `kernel.Table` events whose text is a `table.Output` (the
+  table, golars' HTML and plain text); the notebook saves them as the table
+  JSON, `text/html` and `text/plain`. The UI draws them with
+  `Model.tableStyles` (rebuilt in `applyTheme`), the runner with its own.
+- `Completer` talks to golars-lsp (`FindLSP`) over `internal/lsp`. It sends
+  one virtual document, the earlier glr cells then the current one
+  (`complete.Request.Before`, built by `Model.glrBefore`), next to the
+  notebook so relative paths resolve, and maps positions (`Doc`). Its
+  diagnostics arrive as `publishDiagnostics` notifications; `Diagnose` waits
+  for the next one. Without golars-lsp it falls back to `Commands`, a copy
+  of golars' `script.Commands`.
+- `Check` lints a glr cell with `golars lint` for the AI assistant, which
+  uses separate glr system prompts (`internal/ai`).
+
+### Go cells and golars (`internal/kernel`)
+
+- `nb.Display` and trailing expressions duck type values: a
+  `MimeBundle() map[string]string` method (golars DataFrame and Series) is
+  sent as a bundle (`wire.Bundle`) and becomes the richest event gopyter
+  draws (`BundleEvent`: golars table, HTML, markdown, image, text); an
+  `HTML() string` method is shown as HTML. The runtime stays stdlib only:
+  never import golars there.
+- `GOLARS_DIR` adds a `replace` for golars to the workspace `go.mod` and
+  merges golars' `go.sum`, so cells import golars offline from the module
+  cache (`linkGolars`).
+
 ### UI (`internal/ui`)
 
 - `Model` uses pointer receivers. `View()` intentionally records render-time
@@ -251,6 +319,14 @@ concatenation in WriteString") count as issues to fix too.
   and gopyter's runtime only), write files only under relative paths, and
   finish without input (widgets are done at once, stdin may be empty).
   Save them through gopyter (or `notebook.Save`) so the format matches.
+  The golars examples read the `*.csv` files next to them (copied into the
+  test's directory) and are skipped when `golars` isn't found or, for Go
+  cells importing golars, `GOLARS_DIR` isn't set.
+- glr tests use a fake `golars kernel-host`: the test binary itself, run with
+  `GLR_FAKE_HOST=1` (see `TestMain` in `internal/glr`). Tests against the
+  real golars and golars-lsp skip when they aren't installed. To run them,
+  build golars (with the patches in `golars-patches`) and set `GOLARS_BIN`,
+  `GOLARS_LSP` and `GOLARS_DIR`.
   Completion tests start a real `gopls` and skip when it isn't installed.
 - Add or update tests for any behavior change, and add a regression test when
   fixing a bug.
@@ -287,7 +363,7 @@ concatenation in WriteString") count as issues to fix too.
   `<type>(<scope>): <summary>`, in the imperative mood, lowercase, at most 72
   characters. Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`,
   `build`, `chore`. Scopes are package names: `ui`, `kernel`, `complete`,
-  `lsp`, `notebook`, `runner`, `cmd` (for `main.go`). For example:
+  `lsp`, `notebook`, `runner`, `glr`, `table`, `cmd` (for `main.go`). For example:
   `feat(ui): add tab focus cycling to dialogs`.
 - Don't commit build artifacts. `/gopyter` and `dist/` are ignored; build to `/tmp`.
 - Reusable workflows live in `.kit/prompts/` as slash commands:
