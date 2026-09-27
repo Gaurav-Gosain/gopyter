@@ -167,7 +167,8 @@ func rootCmd() *cobra.Command {
 				return err
 			}
 			var nb *notebook.Notebook
-			if strings.EqualFold(filepath.Ext(path), ".glr") {
+			imported := strings.EqualFold(filepath.Ext(path), ".glr")
+			if imported {
 				nb, path, err = importScript(cmd, path)
 			} else {
 				nb, err = loadNotebook(path, lang)
@@ -196,7 +197,7 @@ func rootCmd() *cobra.Command {
 				vim = settings.Vim
 			}
 			opts := ui.Options{
-				Path: path, Notebook: nb, Kernel: k,
+				Path: path, Notebook: nb, Kernel: k, Unsaved: imported,
 				Vim: vim, SaveVim: saveVim,
 				Theme: name, SyntaxTheme: syntax, SaveTheme: saveTheme,
 				// Probe before the TUI takes over the terminal, so the

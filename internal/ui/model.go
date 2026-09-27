@@ -104,6 +104,9 @@ type Options struct {
 	// GLRCompleter completes glr cells, and may also implement
 	// Documenter and Diagnoser (optional).
 	GLRCompleter Completer
+	// Unsaved marks the notebook as changed from the file at Path, as
+	// when it was imported from a .glr script.
+	Unsaved bool
 }
 
 // Model is the root Bubble Tea model.
@@ -242,6 +245,7 @@ func New(opts Options) *Model {
 	}
 	m.applyTheme(name)
 	m.snapshotDisk()
+	m.dirty = opts.Unsaved
 
 	// Start in edit mode on a fresh, empty notebook.
 	if len(m.cells) == 1 && m.cells[0].ed.Value() == "" {
