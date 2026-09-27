@@ -494,6 +494,7 @@ func basic(req complete.Request) complete.Result {
 	if prefix == "" && !req.Manual {
 		return res
 	}
+	add(req.Frames, "shared frame", complete.KindVar)
 	add(keywords, "", complete.KindKeyword)
 	add(Functions["free"], "function", complete.KindFunc)
 	add(namespaces, "namespace", complete.KindPackage)

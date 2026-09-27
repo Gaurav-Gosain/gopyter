@@ -589,7 +589,7 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 			for _, p := range missing {
 				emit(Event{Kind: Info, Text: "go get " + p})
 				if gout, gerr := k.goCmd(ctx, "get", p).CombinedOutput(); gerr != nil {
-					emit(Event{Kind: Error, Text: strings.TrimSpace(string(gout))})
+					emit(Event{Kind: Error, Text: strings.TrimSpace(string(gout)) + golarsHint(p)})
 					return ErrCompile
 				}
 			}
@@ -598,7 +598,11 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 			}
 			continue
 		}
-		emit(Event{Kind: Error, Text: cleanErrors(string(out), k.Dir)})
+		msg := cleanErrors(string(out), k.Dir)
+		if strings.Contains(msg, "provides package "+GolarsPath) || strings.Contains(msg, "providing package "+GolarsPath) {
+			msg += golarsHint(GolarsPath)
+		}
+		emit(Event{Kind: Error, Text: msg})
 		return ErrCompile
 	}
 

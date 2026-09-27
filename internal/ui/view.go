@@ -616,6 +616,11 @@ func (m *Model) renderCell(i, width int) cellRender {
 	} else {
 		r.lines = append(r.lines, bar+blank+boxBottom(boxW, border))
 	}
+	if len(m.cells) == 1 && c.kind == notebook.Code && c.ed.Value() == "" && len(c.outputs) == 0 {
+		for l := range strings.SplitSeq(t.muted.Width(max(boxW-2, 20)).Render(welcomeText(c.baseLang())), "\n") {
+			r.lines = append(r.lines, bar+blank+" "+l)
+		}
+	}
 
 	for _, l := range m.diagLines(c, boxW-2) {
 		r.lines = append(r.lines, bar+blank+"  "+l)
@@ -972,6 +977,9 @@ func (m *Model) renderOverlay() (string, []zone) {
 		tips := t.muted.Render("Top-level func/type/var/const/import declarations persist across cells.\n" +
 			"Other statements run in main(); a trailing expression is displayed.\n" +
 			"Use !cmd for shell commands (e.g. !go get …) and %help for magics.\n" +
+			"Cells are Go or glr (golars script): l switches a code cell, %%glr / %%go as a first line too.\n" +
+			"golars frames are shared by name: Go's df := … is `use df` in glr, glr's `stash top` is\n" +
+			"the Go variable top, and glr's current frame is glr. Each cell says what it shared.\n" +
 			"Mouse: click to select/edit, drag to select text, right-click for a menu.")
 		content := lipgloss.JoinVertical(lipgloss.Left, title("◆ Keyboard shortcuts"), "", grid, "", tips, "",
 			t.subtle.Render("click or press any key to close"))
@@ -1083,4 +1091,15 @@ func (m *Model) composite(base, layer string, x, y int, dim bool) string {
 	lw, lh := lipgloss.Size(layer)
 	uv.NewStyledString(layer).Draw(buf, uv.Rect(x, y, lw, lh))
 	return buf.Render()
+}
+
+// welcomeText is shown under the only cell of a new, empty notebook: how
+// to switch languages and how frames move between them.
+func welcomeText(lang notebook.Lang) string {
+	other := lang.Other()
+	return "This cell is " + string(lang) + ". Press esc then l to make it " + string(other) +
+		" (or start it with %%" + string(other) + "); new cells take the language of the selected one.\n" +
+		"golars frames are shared by name: df := golars.ReadCSV(\"x.csv\") in a Go cell is `use df` in glr, " +
+		"`stash top` in glr is the Go variable top (glr's current frame is glr).\n" +
+		"? shows every key."
 }

@@ -140,12 +140,28 @@ func (k *Kernel) CompletionSource(cellID, src string, row, col int, resolve func
 		}
 	}
 	var prevDecls []string
+	declared := map[string]bool{}
 	for _, d := range k.decls {
 		if d.CellID != cellID && d.Raw != "" {
 			prevDecls = append(prevDecls, d.Raw)
 		}
+		for _, n := range d.Names {
+			declared[n] = true
+		}
 	}
 	k.mu.Unlock()
+	// Frames from glr cells that no Go cell has read yet: they become
+	// variables as soon as a cell mentions them.
+	for _, name := range k.Frames.PendingForGo() {
+		if declared[name] || !GoName(name) {
+			continue
+		}
+		if !seenPath[DataFramePkg] {
+			seenPath[DataFramePkg] = true
+			prevImports = append(prevImports, &Import{Path: DataFramePkg})
+		}
+		prevDecls = append(prevDecls, frameDecl(name).Raw)
+	}
 
 	var w lineWriter
 	var res CompletionSource

@@ -74,6 +74,9 @@ type Request struct {
 	// state isn't in the kernel: for a glr cell, the earlier glr cells,
 	// so frames and columns they load are known. It ends in a newline.
 	Before string
+	// Frames are the frames shared with the other language, completed
+	// as names when nothing better is known.
+	Frames []string
 }
 
 // Engine produces completions for notebook cells.

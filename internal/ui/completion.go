@@ -96,13 +96,31 @@ func (m *Model) completionRequest(c *Cell, row, col int, manual bool, trigger ru
 	req := complete.Request{CellID: c.id, Src: src, Row: row, Col: col, Manual: manual, Trigger: trigger, Lang: string(lang)}
 	if lang == notebook.GLR {
 		req.Before = m.glrBefore(c)
+		if m.k != nil {
+			for _, f := range m.k.Frames.List() {
+				req.Frames = append(req.Frames, f.Name)
+			}
+		}
 	}
 	return req
 }
 
-// glrBefore joins the glr cells above c, as golars-lsp context.
+// glrBefore joins the glr cells above c, as golars-lsp context. It
+// starts with a load of each frame shared from Go cells, so their names
+// and columns complete too.
 func (m *Model) glrBefore(c *Cell) string {
 	var b strings.Builder
+	if m.k != nil {
+		for _, f := range m.k.Frames.List() {
+			if f.InGo && !f.Focus && !strings.ContainsAny(m.k.Frames.FramePath(f.Name), " \t") {
+				b.WriteString("load ")
+				b.WriteString(m.k.Frames.FramePath(f.Name))
+				b.WriteString(" as ")
+				b.WriteString(f.Name)
+				b.WriteByte('\n')
+			}
+		}
+	}
 	for _, o := range m.cells {
 		if o == c {
 			break

@@ -93,6 +93,12 @@ func (k *Kernel) pushFrames(ctx context.Context, code string, emit func(kernel.E
 			}
 			continue
 		}
+		if r.Gen == 0 {
+			// A host that ignored the op ran it as an empty cell.
+			k.noFrames = true
+			emit(kernel.Event{Kind: kernel.Info, Text: errOldGolars.Error()})
+			return nil
+		}
 		k.Frames.GLRImported(name, r.Gen)
 		read = append(read, name)
 	}

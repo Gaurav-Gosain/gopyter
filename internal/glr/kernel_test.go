@@ -42,6 +42,9 @@ func fakeHost() {
 		}
 		r := Reply{ID: req.ID}
 		switch code := strings.TrimSpace(req.Code); {
+		case req.Op != "":
+			// A golars without the frame ops.
+			r.Error = "unknown op " + req.Op
 		case code == "table":
 			if !req.Structured {
 				r.Error = "not structured"

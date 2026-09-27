@@ -112,6 +112,17 @@ func (k *Kernel) setupRuntime(ctx context.Context) error {
 // GolarsPath is the module path of golars.
 const GolarsPath = "github.com/Gaurav-Gosain/golars"
 
+// golarsHint says what to set when golars (pkg is a package path) can't
+// be fetched and GOLARS_DIR isn't set.
+func golarsHint(pkg string) string {
+	if os.Getenv("GOLARS_DIR") != "" || !strings.HasPrefix(pkg, GolarsPath) {
+		return ""
+	}
+	return "\n\ngolars could not be fetched. Build against a local checkout instead: set GOLARS_DIR to it and restart gopyter:\n" +
+		"  git clone https://github.com/Gaurav-Gosain/golars ~/src/golars\n" +
+		"  GOLARS_DIR=~/src/golars gopyter notebook.ipynb"
+}
+
 // linkGolars points the workspace at a local golars checkout (GOLARS_DIR),
 // so cells can import golars without fetching it: a replace directive,
 // plus golars' go.sum, whose checksums let its dependencies resolve from
