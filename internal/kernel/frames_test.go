@@ -111,8 +111,8 @@ func TestFramesNil(t *testing.T) {
 
 func TestWordsAndGoName(t *testing.T) {
 	got := Words(`df.Head(3) // top 2x
-x := "df" + y_1`)
-	if !slices.Equal(got, []string{"df", "Head", "top", "x", "y_1"}) {
+x := "big" + y_1 + %magic`)
+	if !slices.Equal(got, []string{"df", "x", "y_1", "magic"}) {
 		t.Fatalf("Words = %v", got)
 	}
 	for name, ok := range map[string]bool{"df": true, "_x": true, "type": false, "len": false, "_": false, "a-b": false, "é": false, "1a": false} {

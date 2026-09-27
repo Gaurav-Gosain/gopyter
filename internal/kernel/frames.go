@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"go/scanner"
 	"go/token"
 	"go/types"
 	"maps"
@@ -336,35 +337,29 @@ func (f *Frames) Status(other string, shared, read []string) string {
 	return "frames " + strings.Join(parts, "; ")
 }
 
-// Words returns the identifier-like words of src, in order, without
-// duplicates. Words in strings and comments count too: reading a frame
-// that isn't needed costs little, missing one would show a stale frame.
+// Words returns the identifiers of Go source src, in order, without
+// duplicates. Strings and comments don't count, and neither do the
+// names after a dot (df in x.df), which are fields and methods.
 func Words(src string) []string {
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	b := []byte(src)
+	// Errors (magics, shell lines, unfinished code) don't stop the scan.
+	s.Init(fset.AddFile("", fset.Base(), len(b)), b, func(token.Position, string) {}, 0)
 	var out []string
 	seen := map[string]bool{}
-	start := -1
-	flush := func(end int) {
-		if start >= 0 {
-			w := src[start:end]
-			if !seen[w] && (w[0] < '0' || w[0] > '9') {
-				seen[w] = true
-				out = append(out, w)
-			}
-			start = -1
+	prevDot := false
+	for {
+		_, tok, lit := s.Scan()
+		if tok == token.EOF {
+			return out
 		}
-	}
-	for i := 0; i < len(src); i++ {
-		c := src[i]
-		if c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
-			if start < 0 {
-				start = i
-			}
-			continue
+		if tok == token.IDENT && !prevDot && !seen[lit] {
+			seen[lit] = true
+			out = append(out, lit)
 		}
-		flush(i)
+		prevDot = tok == token.PERIOD
 	}
-	flush(len(src))
-	return out
 }
 
 // GoName reports whether name can be a Go variable holding a shared
