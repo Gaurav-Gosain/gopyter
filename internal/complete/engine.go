@@ -21,8 +21,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/lsp"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/lsp"
 )
 
 // Kind classifies completion items.

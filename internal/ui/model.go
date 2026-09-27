@@ -16,10 +16,10 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/htmlview"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/markdown"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 type mode int

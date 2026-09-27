@@ -16,7 +16,7 @@ package ai
 import (
 	"context"
 
-	"github.com/mark3labs/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 )
 
 // Off is the model setting that disables AI features.

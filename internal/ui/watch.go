@@ -9,7 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // watchInterval is how often the notebook file is checked for external

@@ -7,9 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mark3labs/gopyter/internal/ai"
-	"github.com/mark3labs/gopyter/internal/config"
-	"github.com/mark3labs/gopyter/internal/ui"
+	"github.com/Gaurav-Gosain/gopyter/internal/ai"
+	"github.com/Gaurav-Gosain/gopyter/internal/config"
+	"github.com/Gaurav-Gosain/gopyter/internal/ui"
 	"github.com/spf13/cobra"
 )
 

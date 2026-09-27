@@ -5,15 +5,15 @@
 # against the release's checksum file, and installs it.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/mark3labs/gopyter/master/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/mark3labs/gopyter/master/install.sh | bash -s -- --version v0.1.0
+#   curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash -s -- --version v0.1.0
 #   bash install.sh [--bin-dir <dir>] [--version <tag>] [--no-checks]
 #
 # Environment:
 #   GOPYTER_INSTALL_DIR   Same as --bin-dir.
 #   GOPYTER_VERSION       Same as --version.
 #   GOPYTER_RELEASES_URL  Base URL of the releases (default: the GitHub
-#                         releases of mark3labs/gopyter). For mirrors, and for
+#                         releases of Gaurav-Gosain/gopyter). For mirrors, and for
 #                         scripts/install_test.go. The layout under it must be
 #                         <base>/download/<tag>/<asset>.
 #
@@ -37,7 +37,7 @@ die()     { printf '%s  %s\n' "${RED}✗${RESET}" "$*" >&2; exit 1; }
 header()  { printf '\n%s%s%s\n\n' "${BOLD}" "$*" "${RESET}"; }
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
-REPO="mark3labs/gopyter"
+REPO="Gaurav-Gosain/gopyter"
 BIN_NAME="gopyter"
 RELEASES_URL="${GOPYTER_RELEASES_URL:-https://github.com/${REPO}/releases}"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"

@@ -50,7 +50,7 @@ Tag a new version of gopyter following semantic versioning.
    - `git tag -a vX.Y.Z -F /tmp/tag-msg.txt` (write the message to a file so multi-line bodies survive)
    - `git push origin vX.Y.Z`
    - Pushing the tag triggers `.github/workflows/release.yml`: tests, then GoReleaser publishes the Linux/macOS tarballs and checksums that `install.sh` downloads. Watch it with `gh run watch` and confirm the release page lists 4 archives plus `gopyter_X.Y.Z_checksums.txt`
-   - Once published, both `curl -fsSL https://raw.githubusercontent.com/mark3labs/gopyter/master/install.sh | bash` and `go install github.com/mark3labs/gopyter@vX.Y.Z` install it
+   - Once published, both `curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash` and `go install github.com/Gaurav-Gosain/gopyter@vX.Y.Z` install it
 
 ## Guidelines
 

@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/ai"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/ai"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 type pickerSetup struct {

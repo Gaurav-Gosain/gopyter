@@ -105,7 +105,7 @@ import (
 	gopyter_filepath "path/filepath"
 	gopyter_reflect "reflect"
 
-	gopyter_nb "github.com/mark3labs/gopyter/nb"
+	gopyter_nb "github.com/Gaurav-Gosain/gopyter/nb"
 )
 
 // gopyterDisplay shows the value of a cell's trailing expression.

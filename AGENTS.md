@@ -5,7 +5,7 @@ for Go that runs in the terminal. For the user-facing overview, see `README.md`.
 
 ## Project overview
 
-- Single Go module `github.com/mark3labs/gopyter` (Go 1.27). The CLI entry
+- Single Go module `github.com/Gaurav-Gosain/gopyter` (Go 1.27). The CLI entry
   point is `main.go`; everything else lives under `internal/`.
 - The UI is built on the Charm **v2** stack: Bubble Tea, Bubbles, Lip Gloss
   and Fang, plus Ultraviolet and chroma. Markdown is rendered with
@@ -30,7 +30,7 @@ for Go that runs in the terminal. For the user-facing overview, see `README.md`.
 | `internal/complete` | completion engine: gopls backend plus a basic fallback                    |
 | `internal/lsp`      | minimal JSON-RPC/LSP client (stdio)                                       |
 | `internal/ui`       | the Bubble Tea app: editor, cells, mouse zones, dialogs, completion popup |
-| `skills/gopyter`    | agent skill (`SKILL.md`, installable with `npx skills add mark3labs/gopyter`); keep it in sync with user-visible behavior |
+| `skills/gopyter`    | agent skill (`SKILL.md`, installable with `npx skills add Gaurav-Gosain/gopyter`); keep it in sync with user-visible behavior |
 | `scripts`           | tests for `install.sh` (run against a fake release; checked against `.goreleaser.yaml`) |
 
 ### Credit to GoNB
@@ -111,7 +111,7 @@ concatenation in WriteString") count as issues to fix too.
 - `Execute` serializes calls to `emit`. Callers may assume `emit` is never
   called concurrently.
 - Cell programs import runtime packages from `internal/kernel/runtime`:
-  `nb` (`github.com/mark3labs/gopyter/nb`, with `nb/wire`, the transport)
+  `nb` (`github.com/Gaurav-Gosain/gopyter/nb`, with `nb/wire`, the transport)
   and the GoNB shim (`github.com/janpfeifer/gonb/gonbui/...`). They're
   embedded and written into the workspace as two local modules, which its
   `go.mod` requires through `replace` (`setupRuntime`, also after `%reset

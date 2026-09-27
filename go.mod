@@ -1,4 +1,4 @@
-module github.com/mark3labs/gopyter
+module github.com/Gaurav-Gosain/gopyter
 
 go 1.27.1
 

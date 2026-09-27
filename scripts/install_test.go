@@ -268,7 +268,7 @@ func TestInstallRefusesAnUnsupportedPlatform(t *testing.T) {
 			if !strings.Contains(out, tc.want) {
 				t.Errorf("output does not contain %q:\n%s", tc.want, out)
 			}
-			if !strings.Contains(out, "go install github.com/mark3labs/gopyter@latest") {
+			if !strings.Contains(out, "go install github.com/Gaurav-Gosain/gopyter@latest") {
 				t.Errorf("refusal does not suggest go install:\n%s", out)
 			}
 			if strings.Contains(out, "Downloading") {

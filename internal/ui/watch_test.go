@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // watchModel saves nb to a temp file and opens it.

@@ -2,6 +2,11 @@
 
 A Jupyter-style notebook for **Go** that runs in your terminal.
 
+> This is a fork of [mark3labs/gopyter](https://github.com/mark3labs/gopyter)
+> that adds first-class support for [golars](https://github.com/Gaurav-Gosain/golars):
+> `.glr` script cells and Go cells that use the golars DataFrame library. All
+> credit for gopyter itself goes to mark3labs and its contributors.
+
 gopyter builds on the work of [GoNB](https://github.com/janpfeifer/gonb), the Go
 kernel for Jupyter by Jan Pfeifer: it runs cells the same way, shares its
 notebook format and cell commands, and implements its `gonbui` API and widgets,
@@ -22,14 +27,14 @@ so GoNB notebooks run in gopyter too. See [Acknowledgements](#acknowledgements).
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mark3labs/gopyter/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash
 ```
 
 The script installs a checksum-verified release binary for Linux or macOS
 (amd64/arm64). Alternatively:
 
 ```sh
-go install github.com/mark3labs/gopyter@latest
+go install github.com/Gaurav-Gosain/gopyter@latest
 ```
 
 **Requirements:** the [Go toolchain](https://go.dev/dl/) on your `PATH`, since
@@ -41,10 +46,10 @@ basic completion).
 
 To teach a coding agent (Claude Code, Codex, Cursor, …) to use gopyter and
 write notebooks, install the [skill](skills/gopyter/SKILL.md) from
-[skills.sh](https://skills.sh/mark3labs/gopyter):
+[skills.sh](https://skills.sh/Gaurav-Gosain/gopyter):
 
 ```sh
-npx skills add mark3labs/gopyter
+npx skills add Gaurav-Gosain/gopyter
 ```
 
 ## Quickstart
@@ -122,7 +127,7 @@ They run headless too: `gopyter run examples/images.ipynb`.
 
 ## Rich output
 
-gopyter's API is package `nb` (`github.com/mark3labs/gopyter/nb`), which cells
+gopyter's API is package `nb` (`github.com/Gaurav-Gosain/gopyter/nb`), which cells
 use without importing it:
 
 | Function                        | Shows                                          |
@@ -240,7 +245,7 @@ for n := range iters.Listen().LatestOnly().C {
   available.
 
 These packages ship with gopyter and need no download: the kernel workspace's
-`go.mod` points `github.com/janpfeifer/gonb` and `github.com/mark3labs/gopyter`
+`go.mod` points `github.com/janpfeifer/gonb` and `github.com/Gaurav-Gosain/gopyter`
 at local copies. They are gopyter's implementation, not GoNB itself: things
 that need a browser are missing (see above), and the rest may differ in
 details. In a cell starting with `%%`,

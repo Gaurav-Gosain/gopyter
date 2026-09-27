@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // blocks prints a cell's rich outputs (results, markdown, images, HTML),

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )

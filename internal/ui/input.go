@@ -7,9 +7,9 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/htmlview"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // The running cell's program reads two pipes fed by the UI: its standard

@@ -8,10 +8,10 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/complete"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/complete"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
 )
 
 // fakeDocumenter is a completer that also serves hover documentation.

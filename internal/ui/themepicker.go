@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/mark3labs/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 )
 
 // themeState holds the active theme and the theme picker.

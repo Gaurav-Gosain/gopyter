@@ -9,9 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/complete"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/complete"
-	"github.com/mark3labs/gopyter/internal/notebook"
 )
 
 // Completer produces code completions.

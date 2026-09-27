@@ -10,8 +10,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/ai"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/ai"
 )
 
 // AIConfig configures the optional AI features. A nil AIConfig (the noai

@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/mark3labs/gopyter/internal/termimg"
+	"github.com/Gaurav-Gosain/gopyter/internal/termimg"
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"

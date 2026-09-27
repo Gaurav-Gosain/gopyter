@@ -9,8 +9,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/mark3labs/gopyter/internal/complete"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/complete"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // Documenter looks up documentation for the symbol at the cursor. The

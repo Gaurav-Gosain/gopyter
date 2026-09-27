@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/styles"
-	"github.com/mark3labs/gopyter/internal/markdown"
 )
 
 // DefaultTheme is the theme used when none is configured.

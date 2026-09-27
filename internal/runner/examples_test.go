@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 // TestExamples runs every example notebook headlessly: they must run

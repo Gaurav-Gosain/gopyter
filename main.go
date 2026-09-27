@@ -14,12 +14,12 @@ import (
 
 	"charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/mark3labs/gopyter/internal/complete"
-	"github.com/mark3labs/gopyter/internal/config"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
-	"github.com/mark3labs/gopyter/internal/runner"
-	"github.com/mark3labs/gopyter/internal/ui"
+	"github.com/Gaurav-Gosain/gopyter/internal/complete"
+	"github.com/Gaurav-Gosain/gopyter/internal/config"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/runner"
+	"github.com/Gaurav-Gosain/gopyter/internal/ui"
 	"github.com/spf13/cobra"
 )
 

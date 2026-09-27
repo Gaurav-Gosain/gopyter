@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
-	"github.com/mark3labs/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	kit "github.com/mark3labs/kit/pkg/kit"
 )
 

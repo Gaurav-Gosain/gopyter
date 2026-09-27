@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/ai"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/ai"
-	"github.com/mark3labs/gopyter/internal/notebook"
 )
 
 // Assistant proposes new versions of cells: fixes for failing ones, and

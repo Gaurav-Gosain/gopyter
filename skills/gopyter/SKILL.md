@@ -21,8 +21,8 @@ yourself.
 ## Install and check
 
 ```sh
-gopyter --version || curl -fsSL https://raw.githubusercontent.com/mark3labs/gopyter/master/install.sh | bash
-# or: go install github.com/mark3labs/gopyter@latest
+gopyter --version || curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash
+# or: go install github.com/Gaurav-Gosain/gopyter@latest
 go version            # required: cells are built with the Go toolchain on PATH
 ```
 

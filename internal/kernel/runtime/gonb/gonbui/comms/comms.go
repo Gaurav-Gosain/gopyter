@@ -19,9 +19,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gopyter/nb/wire"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gopyter/nb/wire"
 )
 
 // Start is kept for compatibility: gopyter needs no setup.

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/mark3labs/gopyter/internal/complete"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/complete"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 type fakeCompleter struct{ items []complete.Item }

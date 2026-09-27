@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mark3labs/gopyter/internal/htmlview"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 func TestNBPackage(t *testing.T) {
@@ -35,7 +35,7 @@ func TestNBPackage(t *testing.T) {
 		t.Fatalf("compat: %q %v", out, err)
 	}
 	// Explicit import.
-	out, err = run(t, k, "4", "import n \"github.com/mark3labs/gopyter/nb\"\nn.Display(3)")
+	out, err = run(t, k, "4", "import n \"github.com/Gaurav-Gosain/gopyter/nb\"\nn.Display(3)")
 	if err != nil || out != "=> 3\n" {
 		t.Fatalf("explicit import: %q %v", out, err)
 	}

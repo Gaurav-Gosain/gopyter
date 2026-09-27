@@ -32,17 +32,17 @@ type runtimeModule struct {
 }
 
 var runtimeModules = []runtimeModule{
-	{"gopyter", "github.com/mark3labs/gopyter", "module github.com/mark3labs/gopyter\n\ngo 1.23\n"},
-	{"gonb", "github.com/janpfeifer/gonb", "module github.com/janpfeifer/gonb\n\ngo 1.23\n\nrequire github.com/mark3labs/gopyter " + zeroVersion + "\n"},
+	{"gopyter", "github.com/Gaurav-Gosain/gopyter", "module github.com/Gaurav-Gosain/gopyter\n\ngo 1.23\n"},
+	{"gonb", "github.com/janpfeifer/gonb", "module github.com/janpfeifer/gonb\n\ngo 1.23\n\nrequire github.com/Gaurav-Gosain/gopyter " + zeroVersion + "\n"},
 }
 
 // repoRuntime is the import path of the runtime packages in this
 // repository; in the workspace, runtime/<dir>/ is module <path>.
-const repoRuntime = "github.com/mark3labs/gopyter/internal/kernel/runtime/"
+const repoRuntime = "github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/"
 
 // Paths of the runtime packages, as cells import them.
 const (
-	NBPath      = "github.com/mark3labs/gopyter/nb"
+	NBPath      = "github.com/Gaurav-Gosain/gopyter/nb"
 	GonbuiPath  = "github.com/janpfeifer/gonb/gonbui"
 	WidgetsPath = GonbuiPath + "/widgets"
 )

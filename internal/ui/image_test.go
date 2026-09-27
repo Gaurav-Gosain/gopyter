@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/notebook"
 )
 
 func pngBase64(t *testing.T, w, h int) string {

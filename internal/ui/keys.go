@@ -2,7 +2,7 @@ package ui
 
 import (
 	"charm.land/bubbles/v2/key"
-	"github.com/mark3labs/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 )
 
 type keyMap struct {

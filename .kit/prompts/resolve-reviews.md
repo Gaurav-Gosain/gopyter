@@ -14,7 +14,7 @@ gopyter currently has no CI and no review bot configured. If a bot such as CodeR
 
 - If the PR is merged or closed, stop and tell the user
 - If the working tree has unrelated changes, stop and suggest /commit-push first
-- The repo slug is `mark3labs/gopyter` (confirm with `gh repo view --json nameWithOwner -q .nameWithOwner`)
+- The repo slug is `Gaurav-Gosain/gopyter` (confirm with `gh repo view --json nameWithOwner -q .nameWithOwner`)
 
 ## Fetch the findings
 
@@ -26,7 +26,7 @@ Pull **both** comment surfaces, since reviewers use them differently:
 
 2. **Line comments** (the individual findings):
 
-       gh api repos/mark3labs/gopyter/pulls/<pr>/comments --jq '.[] | "=== \(.id) \(.user.login) \(.path):\(.line) ===\n\(.body)"'
+       gh api repos/Gaurav-Gosain/gopyter/pulls/<pr>/comments --jq '.[] | "=== \(.id) \(.user.login) \(.path):\(.line) ===\n\(.body)"'
 
 Read the **full body** of each comment. Bots such as CodeRabbit include severity markers (🟠 Major / 🟡 Minor), committable suggestions, a `🤖 Prompt for AI Agents` block and "Also applies to" line lists, and they all matter.
 
@@ -38,7 +38,7 @@ Check every finding against the **current** code, because the comment may be out
 - **Already addressed** (by a later commit) → skip, and note the commit that fixed it
 - **Intentional behavior** the reviewer misread → skip, and reply on the thread explaining why:
 
-      gh api repos/mark3labs/gopyter/pulls/<pr>/comments/<comment-id>/replies -f body="..."
+      gh api repos/Gaurav-Gosain/gopyter/pulls/<pr>/comments/<comment-id>/replies -f body="..."
 
 - **Wrong or out of scope** → skip, with a brief reason in your report; don't silently ignore it
 
@@ -63,7 +63,7 @@ Never blindly apply a committable suggestion; read the surrounding code first. C
 1. Get the pushed SHA: `git log -1 --format=%H`
 2. Poll the commit status until the bot reports completion:
 
-       gh api repos/mark3labs/gopyter/commits/<sha>/status --jq '{state, statuses: [.statuses[] | {context, state, description}]}'
+       gh api repos/Gaurav-Gosain/gopyter/commits/<sha>/status --jq '{state, statuses: [.statuses[] | {context, state, description}]}'
 
    Wait 90–240 seconds between checks; reviews usually land in 2–5 minutes
 3. If no review lands after about 3 polls, check for a rate-limit pause: an issue comment from the bot saying "Please wait N minutes". Wait out that **exact** cooldown plus about 60 seconds, then request a review once with `gh pr comment <pr> --body "@coderabbitai review"`. Never request again while a pause is active; early requests reset the timer
@@ -73,7 +73,7 @@ Never blindly apply a committable suggestion; read the surrounding code first. C
 1. Re-fetch the line comments and compare them with the set you already handled (new findings have new IDs)
 2. Check that the old threads resolved:
 
-       gh api graphql -f query='query { repository(owner: "mark3labs", name: "gopyter") { pullRequest(number: <pr>) { reviewThreads(first: 50) { nodes { isResolved isOutdated path } } } } }'
+       gh api graphql -f query='query { repository(owner: "Gaurav-Gosain", name: "gopyter") { pullRequest(number: <pr>) { reviewThreads(first: 50) { nodes { isResolved isOutdated path } } } } }'
 
 3. New actionable comments → back to *Triage*
 4. A bot thread still open for a finding you fixed → reply once on that thread: `@coderabbitai please check that this has been addressed.`

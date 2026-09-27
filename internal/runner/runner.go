@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/termimg"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/mark3labs/gopyter/internal/htmlview"
-	"github.com/mark3labs/gopyter/internal/kernel"
-	"github.com/mark3labs/gopyter/internal/markdown"
-	"github.com/mark3labs/gopyter/internal/notebook"
-	"github.com/mark3labs/gopyter/internal/termimg"
 )
 
 var (

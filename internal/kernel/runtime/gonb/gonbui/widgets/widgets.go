@@ -23,9 +23,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui/comms"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui/dom"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui/comms"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui/dom"
 )
 
 func panicf(format string, args ...any) { panic(fmt.Sprintf(format, args...)) }

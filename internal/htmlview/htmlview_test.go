@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mark3labs/gopyter/internal/notebook"
 )
 
 func plain(src string, width int) []string {

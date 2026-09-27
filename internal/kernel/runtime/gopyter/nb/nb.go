@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gopyter/nb/wire"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gopyter/nb/wire"
 )
 
 // Display shows the given values as the cell's output. Images

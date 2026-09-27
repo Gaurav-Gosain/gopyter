@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/gopyter/internal/kernel"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 )
 
 func labels(items []Item) []string {

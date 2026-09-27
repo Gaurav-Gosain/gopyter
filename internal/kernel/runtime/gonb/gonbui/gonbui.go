@@ -16,8 +16,8 @@ import (
 	"image/png"
 	"log"
 
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gopyter/nb/wire"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gopyter/nb/wire"
 )
 
 // IsNotebook reports whether the program runs in a notebook (gopyter).

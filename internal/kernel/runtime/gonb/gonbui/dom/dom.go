@@ -15,9 +15,9 @@ import (
 	"maps"
 	"os"
 
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
-	"github.com/mark3labs/gopyter/internal/kernel/runtime/gopyter/nb/wire"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gonb/gonbui/protocol"
+	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gopyter/nb/wire"
 )
 
 // errNoJS is returned by the functions that load JavaScript.
