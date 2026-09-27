@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 )
 
 // CellType is the kind of a notebook cell.
@@ -33,8 +35,11 @@ const (
 	MarkdownOut OutputKind = "markdown"
 	ImageOut    OutputKind = "image" // Text is base64 image data (PNG unless read from a notebook)
 	HTMLOut     OutputKind = "html"
-	Error       OutputKind = "error"
-	Info        OutputKind = "info"
+	// TableOut is a golars DataFrame or Series: Text is a table.Output
+	// (JSON), saved as its table data, text/html and text/plain.
+	TableOut OutputKind = "table"
+	Error    OutputKind = "error"
+	Info     OutputKind = "info"
 )
 
 // Output is a single output of a code cell.
@@ -69,6 +74,30 @@ func NewID() string {
 	return hex.EncodeToString(b)
 }
 
+// mimeData is a value of an output's mime bundle: text (a string or a
+// list of lines) or, for JSON media types, any JSON value, kept as is.
+type mimeData struct {
+	text multiline
+	json json.RawMessage
+}
+
+func (d *mimeData) UnmarshalJSON(b []byte) error {
+	if err := d.text.UnmarshalJSON(b); err == nil {
+		return nil
+	}
+	d.json = append(json.RawMessage(nil), b...)
+	return nil
+}
+
+func (d mimeData) MarshalJSON() ([]byte, error) {
+	if d.json != nil {
+		return d.json, nil
+	}
+	return d.text.MarshalJSON()
+}
+
+func textData(s string) mimeData { return mimeData{text: multiline(s)} }
+
 // multiline handles nbformat strings which can be a string or a list of strings.
 type multiline string
 
@@ -102,15 +131,15 @@ func (m multiline) MarshalJSON() ([]byte, error) {
 }
 
 type rawOutput struct {
-	OutputType     string               `json:"output_type"`
-	Name           string               `json:"name,omitempty"`
-	Text           *multiline           `json:"text,omitempty"`
-	Data           map[string]multiline `json:"data,omitempty"`
-	Metadata       map[string]any       `json:"metadata,omitempty"`
-	ExecutionCount *int                 `json:"execution_count,omitempty"`
-	EName          string               `json:"ename,omitempty"`
-	EValue         string               `json:"evalue,omitempty"`
-	Traceback      []string             `json:"traceback,omitempty"`
+	OutputType     string              `json:"output_type"`
+	Name           string              `json:"name,omitempty"`
+	Text           *multiline          `json:"text,omitempty"`
+	Data           map[string]mimeData `json:"data,omitempty"`
+	Metadata       map[string]any      `json:"metadata,omitempty"`
+	ExecutionCount *int                `json:"execution_count,omitempty"`
+	EName          string              `json:"ename,omitempty"`
+	EValue         string              `json:"evalue,omitempty"`
+	Traceback      []string            `json:"traceback,omitempty"`
 }
 
 type rawCell struct {
@@ -180,20 +209,30 @@ func decodeOutput(o rawOutput) []Output {
 			return []Output{{Kind: kind, Text: string(*o.Text)}}
 		}
 	case "execute_result", "display_data":
+		if tb, ok := o.Data[table.MIME]; ok && tb.json != nil {
+			out, ok := table.FromBundle(map[string]string{
+				table.MIME:   string(tb.json),
+				"text/html":  string(o.Data["text/html"].text),
+				"text/plain": string(o.Data["text/plain"].text),
+			})
+			if ok {
+				return []Output{{Kind: TableOut, Text: out.Encode()}}
+			}
+		}
 		if md, ok := o.Data["text/markdown"]; ok {
-			return []Output{{Kind: MarkdownOut, Text: string(md)}}
+			return []Output{{Kind: MarkdownOut, Text: string(md.text)}}
 		}
 		for _, mime := range []string{"image/png", "image/jpeg", "image/gif"} {
 			if img, ok := o.Data[mime]; ok {
 				// Jupyter may wrap base64 over lines; keep it on one.
-				return []Output{{Kind: ImageOut, Text: strings.Join(strings.Fields(string(img)), "")}}
+				return []Output{{Kind: ImageOut, Text: strings.Join(strings.Fields(string(img.text)), "")}}
 			}
 		}
 		if h, ok := o.Data["text/html"]; ok {
-			return []Output{{Kind: HTMLOut, Text: string(h)}}
+			return []Output{{Kind: HTMLOut, Text: string(h.text)}}
 		}
 		if t, ok := o.Data["text/plain"]; ok {
-			return []Output{{Kind: Result, Text: string(t)}}
+			return []Output{{Kind: Result, Text: string(t.text)}}
 		}
 	case "error":
 		text := o.EName + ": " + o.EValue
@@ -215,16 +254,33 @@ func encodeOutput(o Output, count int) rawOutput {
 	case Result:
 		c := count
 		return rawOutput{OutputType: "execute_result", ExecutionCount: &c, Metadata: map[string]any{},
-			Data: map[string]multiline{"text/plain": text}}
+			Data: map[string]mimeData{"text/plain": textData(o.Text)}}
 	case MarkdownOut:
 		return rawOutput{OutputType: "display_data", Metadata: map[string]any{},
-			Data: map[string]multiline{"text/markdown": text}}
+			Data: map[string]mimeData{"text/markdown": textData(o.Text)}}
 	case HTMLOut:
 		return rawOutput{OutputType: "display_data", Metadata: map[string]any{},
-			Data: map[string]multiline{"text/html": text}}
+			Data: map[string]mimeData{"text/html": textData(o.Text)}}
 	case ImageOut:
 		return rawOutput{OutputType: "display_data", Metadata: map[string]any{},
-			Data: map[string]multiline{imageMime(o.Text): text, "text/plain": "[image]"}}
+			Data: map[string]mimeData{imageMime(o.Text): textData(o.Text), "text/plain": textData("[image]")}}
+	case TableOut:
+		t, err := table.Decode(o.Text)
+		if err != nil {
+			return rawOutput{OutputType: "stream", Name: "stdout", Text: &text}
+		}
+		tj, err := json.Marshal(t.Table)
+		if err != nil {
+			return rawOutput{OutputType: "stream", Name: "stdout", Text: &text}
+		}
+		if t.Plain == "" {
+			t.Plain = table.Plain(t.Table)
+		}
+		data := map[string]mimeData{table.MIME: {json: tj}, "text/plain": textData(t.Plain)}
+		if t.HTML != "" {
+			data["text/html"] = textData(t.HTML)
+		}
+		return rawOutput{OutputType: "display_data", Metadata: map[string]any{}, Data: data}
 	default:
 		return rawOutput{OutputType: "error", EName: "error", EValue: o.Text, Traceback: strings.Split(o.Text, "\n")}
 	}
@@ -252,10 +308,10 @@ func (nb *Notebook) Marshal() ([]byte, error) {
 		meta = map[string]any{}
 	}
 	if _, ok := meta["kernelspec"]; !ok {
-		meta["kernelspec"] = map[string]any{"display_name": "Go (gonb)", "language": "go", "name": "gonb"}
+		meta["kernelspec"] = goKernelspec()
 	}
 	if _, ok := meta["language_info"]; !ok {
-		meta["language_info"] = map[string]any{"name": "go", "file_extension": ".go", "mimetype": "text/x-go"}
+		meta["language_info"] = goLanguageInfo()
 	}
 	raw := rawNotebook{Metadata: meta, NBFormat: 4, NBFormatMinor: 5, Cells: []rawCell{}}
 	for _, c := range nb.Cells {
