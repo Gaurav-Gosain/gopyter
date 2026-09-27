@@ -2,6 +2,7 @@ package glr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -41,17 +42,71 @@ func (k *Kernel) Check(ctx context.Context, before, name, src string) (kernel.Ch
 	if err := os.WriteFile(path, []byte(doc.Content), 0o644); err != nil {
 		return kernel.CheckResult{}, err
 	}
-	cmd := exec.CommandContext(ctx, bin, "lint", path)
+	lines := strings.Count(code, "\n") + 1
+	// golars lint --json reports columns, dtypes and bad calls with
+	// positions; older golars versions only have the plain format.
+	out, err := runLint(ctx, bin, "lint", "--json", path)
+	if err != nil {
+		return kernel.CheckResult{}, err
+	}
+	if msgs, ok := lintJSONErrors(out, name, doc.Offset, lines); ok {
+		return kernel.CheckResult{Errors: msgs}, nil
+	}
+	out, err = runLint(ctx, bin, "lint", path)
+	if err != nil {
+		return kernel.CheckResult{}, err
+	}
+	return kernel.CheckResult{Errors: lintErrors(out, path, name, doc.Offset, lines)}, nil
+}
+
+func runLint(ctx context.Context, bin string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(os.Environ(), "NO_COLOR=1")
 	out, err := cmd.Output()
 	if ctx.Err() != nil {
-		return kernel.CheckResult{}, ctx.Err()
+		return "", ctx.Err()
 	}
-	// golars lint exits non-zero when it has warnings.
 	if ee := (*exec.ExitError)(nil); err != nil && !errors.As(err, &ee) {
-		return kernel.CheckResult{}, err
+		return "", err
 	}
-	return kernel.CheckResult{Errors: lintErrors(string(out), path, name, doc.Offset, strings.Count(code, "\n")+1)}, nil
+	return string(out), nil
+}
+
+// lintFinding is one entry of `golars lint --json`.
+type lintFinding struct {
+	Line     int    `json:"line"`
+	Column   int    `json:"column"`
+	Severity string `json:"severity"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	Hint     string `json:"hint"`
+}
+
+// lintJSONErrors formats the errors of `golars lint --json` output that
+// fall inside the checked cell. It reports false when out is not that
+// JSON. Warnings (an unused stash) and missing files are left to the
+// run: the check runs away from the notebook's data.
+func lintJSONErrors(out, name string, offset, lines int) (string, bool) {
+	var fs []lintFinding
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &fs); err != nil {
+		return "", false
+	}
+	var errs []string
+	for _, f := range fs {
+		if f.Severity != "error" || f.Code == "missing-file" || f.Code == "unreadable-file" {
+			continue
+		}
+		row := f.Line - offset
+		if row < 1 || row > lines {
+			continue
+		}
+		msg := fmt.Sprintf("%s:%d: %s", name, row, f.Message)
+		if f.Hint != "" {
+			msg += " (" + f.Hint + ")"
+		}
+		errs = append(errs, msg)
+	}
+	return strings.Join(errs, "\n"), true
 }
 
 // lintErrors keeps the lint messages about the cell's lines, positioned in

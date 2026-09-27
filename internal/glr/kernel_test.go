@@ -216,6 +216,19 @@ func TestLintErrors(t *testing.T) {
 	}
 }
 
+func TestLintJSONErrors(t *testing.T) {
+	out := `[{"line":1,"column":1,"severity":"warning","code":"unused-stash","message":"stash \"a\" is never used"},
+{"line":3,"column":8,"severity":"error","code":"unknown-column","message":"unknown column \"amout\"","hint":"did you mean \"amount\"?"},
+{"line":4,"column":6,"severity":"error","code":"missing-file","message":"file \"x.csv\" does not exist"}]`
+	got, ok := lintJSONErrors(out, "In[2]", 1, 5)
+	if !ok || got != `In[2]:2: unknown column "amout" (did you mean "amount"?)` {
+		t.Fatalf("got %q %v", got, ok)
+	}
+	if _, ok := lintJSONErrors("usage: golars lint", "In[1]", 0, 1); ok {
+		t.Fatal("plain output parsed as JSON")
+	}
+}
+
 // Check lints with the real golars when it is installed.
 func TestCheck(t *testing.T) {
 	if _, err := FindGolars(); err != nil || testing.Short() {
