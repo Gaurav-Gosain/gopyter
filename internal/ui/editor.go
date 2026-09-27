@@ -436,6 +436,9 @@ func (e *Editor) ReplaceBeforeCursor(n int, text string) {
 // the text before the cursor with the Go scanner, which, unlike syntax
 // highlighters, understands literals that aren't terminated yet.
 func (e *Editor) InCodeContext() bool {
+	if e.lang == "glr" {
+		return glrCodeContext(e.lines[e.row][:e.col])
+	}
 	var b strings.Builder
 	for i := 0; i < e.row; i++ {
 		b.WriteString(string(e.lines[i]))
@@ -464,6 +467,23 @@ func (e *Editor) InCodeContext() bool {
 			return literalClosed(lit)
 		}
 	}
+}
+
+// glrCodeContext reports whether the end of a glr line is outside a
+// string and a # comment.
+func glrCodeContext(line []rune) bool {
+	inStr := false
+	for i := 0; i < len(line); i++ {
+		switch r := line[i]; {
+		case inStr && r == '\\':
+			i++
+		case r == '"':
+			inStr = !inStr
+		case !inStr && r == '#':
+			return false
+		}
+	}
+	return !inStr
 }
 
 // literalClosed reports whether a string or rune literal is terminated.

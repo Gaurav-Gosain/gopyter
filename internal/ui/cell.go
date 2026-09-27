@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/charmbracelet/x/ansi"
@@ -37,6 +38,13 @@ type Cell struct {
 	duration time.Duration
 	expanded bool
 	metadata map[string]any
+	// lang is the language of a code cell, before any %%go/%%glr magic
+	// (see runLang).
+	lang notebook.Lang
+	// diags are golars-lsp's diagnostics for diagSrc, the source they
+	// were computed for (glr cells).
+	diags   []glr.Diagnostic
+	diagSrc string
 	// ran is set once the cell has run in the current kernel session. The
 	// execution count may come from the saved notebook instead.
 	ran bool
@@ -70,27 +78,61 @@ func (c *Cell) outputFingerprint(width int, focus string, live bool) outputKey {
 	return k
 }
 
-func langFor(kind notebook.CellType) string {
+// langFor is the highlighting language of a cell.
+func langFor(kind notebook.CellType, lang notebook.Lang) string {
 	if kind == notebook.Markdown {
 		return "markdown"
 	}
 	if kind == notebook.Raw {
 		return "plaintext"
 	}
-	return "go"
+	return string(lang)
 }
 
+// newCell returns a Go cell; see Model.newCodeCell for the notebook's
+// language.
 func newCell(kind notebook.CellType, src string) *Cell {
-	return &Cell{id: notebook.NewID(), kind: kind, ed: NewEditor(langFor(kind), src)}
+	return newLangCell(kind, notebook.Go, src)
 }
 
-func fromNotebook(c *notebook.Cell) *Cell {
+func newLangCell(kind notebook.CellType, lang notebook.Lang, src string) *Cell {
+	c := &Cell{id: notebook.NewID(), kind: kind, lang: lang}
+	c.ed = NewEditor(langFor(kind, c.runLang(src)), src)
+	return c
+}
+
+// fromNotebook converts a notebook cell; def is the notebook's language.
+func fromNotebook(c *notebook.Cell, def notebook.Lang) *Cell {
 	cell := &Cell{
-		id: c.ID, kind: c.Type, ed: NewEditor(langFor(c.Type), c.Source),
+		id: c.ID, kind: c.Type, lang: notebook.CellLang(c.Metadata, def),
 		outputs: c.Outputs, count: c.ExecutionCount, metadata: c.Metadata,
 		status: diskStatus(c),
 	}
+	cell.ed = NewEditor(langFor(c.Type, cell.runLang(c.Source)), c.Source)
 	return cell
+}
+
+// runLang is the language the cell runs in: its own, unless the source
+// starts with a %%go or %%glr magic.
+func (c *Cell) runLang(src string) notebook.Lang {
+	l, _ := notebook.Resolve(src, c.baseLang())
+	return l
+}
+
+// baseLang is the cell's language, ignoring magics.
+func (c *Cell) baseLang() notebook.Lang {
+	if c.lang == "" {
+		return notebook.Go
+	}
+	return c.lang
+}
+
+// syncLang updates the highlighting after the language or a magic
+// changed.
+func (c *Cell) syncLang() {
+	if want := langFor(c.kind, c.runLang(c.ed.Value())); c.ed.lang != want {
+		c.ed.SetLang(want)
+	}
 }
 
 // diskStatus derives a cell's run status from its saved outputs.
@@ -106,19 +148,25 @@ func diskStatus(c *notebook.Cell) cellStatus {
 	return statusOK
 }
 
-func (c *Cell) toNotebook() *notebook.Cell {
-	return &notebook.Cell{ID: c.id, Type: c.kind, Source: c.ed.Value(), ExecutionCount: c.count, Outputs: c.outputs, Metadata: c.metadata}
+// toNotebook converts the cell; def is the notebook's language.
+func (c *Cell) toNotebook(def notebook.Lang) *notebook.Cell {
+	md := c.metadata
+	if c.kind == notebook.Code && c.lang != "" {
+		md = notebook.SetCellLang(md, c.lang, def)
+		c.metadata = md
+	}
+	return &notebook.Cell{ID: c.id, Type: c.kind, Source: c.ed.Value(), ExecutionCount: c.count, Outputs: c.outputs, Metadata: md}
 }
 
 func (c *Cell) clone() *Cell {
-	n := newCell(c.kind, c.ed.Value())
+	n := newLangCell(c.kind, c.lang, c.ed.Value())
 	n.outputs = append([]notebook.Output(nil), c.outputs...)
 	return n
 }
 
 func (c *Cell) setKind(kind notebook.CellType) {
 	c.kind = kind
-	c.ed.SetLang(langFor(kind))
+	c.ed.SetLang(langFor(kind, c.runLang(c.ed.Value())))
 	if kind != notebook.Code {
 		c.outputs, c.count, c.status = nil, 0, statusIdle
 		c.outRev++

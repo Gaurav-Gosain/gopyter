@@ -31,6 +31,7 @@ type keyMap struct {
 	MoveDown     key.Binding
 	ToMarkdown   key.Binding
 	ToCode       key.Binding
+	SwitchLang   key.Binding
 	ToggleOutput key.Binding
 	ClearOutput  key.Binding
 	RunAll       key.Binding
@@ -81,6 +82,7 @@ func newKeyMap() keyMap {
 		MoveDown:     b([]string{"J", "shift+down"}, "J", "move down"),
 		ToMarkdown:   b([]string{"m"}, "m", "to markdown"),
 		ToCode:       b([]string{"y"}, "y", "to code"),
+		SwitchLang:   b([]string{"l"}, "l", "go ⇄ glr"),
 		ToggleOutput: b([]string{"o"}, "o", "fold output"),
 		ClearOutput:  b([]string{"O"}, "O", "clear output"),
 		RunAll:       b([]string{"A"}, "A", "run all"),
@@ -199,7 +201,7 @@ func (k keyMap) baseHelp() []helpSection {
 		}},
 		{"Navigation", []key.Binding{k.Up, k.Down, k.Top, k.Bottom, k.PageUp, k.PageDown, k.Edit, k.Escape}},
 		{"Cells", []key.Binding{k.InsertAbove, k.InsertBelow, k.Delete, k.Undelete, k.Cut, k.Copy, k.Paste, k.MoveUp, k.MoveDown}},
-		{"Misc", []key.Binding{k.ToMarkdown, k.ToCode, k.ToggleOutput, k.ClearOutput, k.Save, k.Theme, k.ToggleVim, k.Help, k.Quit}},
+		{"Misc", []key.Binding{k.ToMarkdown, k.ToCode, k.SwitchLang, k.ToggleOutput, k.ClearOutput, k.Save, k.Theme, k.ToggleVim, k.Help, k.Quit}},
 		{"Editing", []key.Binding{
 			k.Undo, k.Redo,
 			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("⇧+move", "select")),

@@ -44,7 +44,7 @@ dom.SetInnerText("freq", "final")
 fmt.Println(dom.GetInnerHtml("freq"))`
 	nb := &notebook.Notebook{Cells: []*notebook.Cell{{ID: "a", Type: notebook.Code, Source: src}}}
 	var out bytes.Buffer
-	if failed := Run(context.Background(), k, nb, &out, nil, false); failed != 0 {
+	if failed := Run(context.Background(), k, nil, nb, &out, nil, false); failed != 0 {
 		t.Fatalf("failed:\n%s", out.String())
 	}
 	outs := nb.Cells[0].Outputs
@@ -80,7 +80,7 @@ dom.Append(div, "<b id=\"n\">0</b>")
 dom.SetInnerText("n", "counted")`
 	nb := &notebook.Notebook{Cells: []*notebook.Cell{{ID: "a", Type: notebook.Code, Source: src}}}
 	var out bytes.Buffer
-	if failed := Run(context.Background(), k, nb, &out, nil, false); failed != 0 {
+	if failed := Run(context.Background(), k, nil, nb, &out, nil, false); failed != 0 {
 		t.Fatalf("failed:\n%s", out.String())
 	}
 	// Only the output, not the echoed code.

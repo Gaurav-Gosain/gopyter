@@ -52,9 +52,10 @@ func (m *Model) closeInfo() {
 	m.info = infoState{seq: m.info.seq + 1} // drop in-flight responses
 }
 
-// documenter returns the completer's documentation backend, if any.
+// documenter returns the documentation backend of the current cell's
+// completer, if any.
 func (m *Model) documenter() Documenter {
-	d, _ := m.completer.(Documenter)
+	d, _ := m.completerFor(m.cur()).(Documenter)
 	return d
 }
 
@@ -66,6 +67,9 @@ func (m *Model) requestInfo() tea.Cmd {
 	}
 	d := m.documenter()
 	if d == nil {
+		if c.runLang(c.ed.Value()) == notebook.GLR {
+			return m.setStatus(statusInfo, "symbol info needs golars")
+		}
 		return m.setStatus(statusInfo, "symbol info needs gopls")
 	}
 	m.closeCompletion()
@@ -74,7 +78,7 @@ func (m *Model) requestInfo() tea.Cmd {
 	m.info.open, m.info.loading = true, true
 	m.info.cellID, m.info.row, m.info.col = c.id, row, col
 	seq := m.info.seq
-	req := complete.Request{CellID: c.id, Src: c.ed.Value(), Row: row, Col: col, Manual: true}
+	req := m.completionRequest(c, row, col, true, 0)
 	return tea.Batch(func() tea.Msg {
 		// The first request may wait for gopls to load the workspace.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

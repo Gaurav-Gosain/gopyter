@@ -133,12 +133,19 @@ func (m *Model) renderHeader() string {
 		state = t.statusOK.Render("●") + t.dim.Render(" idle")
 	}
 	right := t.muted.Render(m.k.GoVersion()) + t.subtle.Render("  │  ") + state + " "
-	if cs, ok := m.completer.(completerStatus); ok {
-		label := t.muted.Render("gopls")
-		if gopls, reason := cs.Status(); !gopls {
+	if m.lang == notebook.GLR {
+		right = lipgloss.NewStyle().Foreground(colAccent).Render("glr") + t.subtle.Render("  │  ") + right
+	}
+	if cs, ok := m.completerFor(m.cur()).(completerStatus); ok {
+		server := "gopls"
+		if m.completerFor(m.cur()) == m.glrComp {
+			server = "golars-lsp"
+		}
+		label := t.muted.Render(server)
+		if ok, reason := cs.Status(); !ok {
 			label = t.subtle.Render("basic completion")
-			if reason == "gopls starting" {
-				label = t.subtle.Render("gopls…")
+			if reason == server+" starting" {
+				label = t.subtle.Render(server + "…")
 			}
 		}
 		right = label + t.subtle.Render("  │  ") + right
@@ -524,12 +531,16 @@ func (m *Model) renderCell(i, width int) cellRender {
 	// Top border with language title and status badge.
 	// The type label doubles as a code ⇄ markdown toggle.
 	convAct, convTip, convTo := m.convertAction(i)
-	title := " " + t.muted.Render(langTitle(c.kind)) + " "
+	c.syncLang()
+	lt := cellTitle(c)
+	title := " " + t.muted.Render(lt) + " "
 	switch {
 	case m.hovered(convAct):
-		title = t.btnHover.Render(" " + langTitle(c.kind) + " → " + convTo + " ")
+		title = t.btnHover.Render(" " + lt + " → " + convTo + " ")
 	case editing:
-		title = " " + lipgloss.NewStyle().Foreground(colSuccess).Render(langTitle(c.kind)) + " "
+		title = " " + lipgloss.NewStyle().Foreground(colSuccess).Render(lt) + " "
+	case c.kind == notebook.Code && c.runLang(c.ed.Value()) == notebook.GLR:
+		title = " " + lipgloss.NewStyle().Foreground(colAccent).Render(lt) + " "
 	}
 	// boxTop places the title right after "╭─".
 	titleX := gutterWidth + 2
@@ -573,9 +584,13 @@ func (m *Model) renderCell(i, width int) cellRender {
 	if c.ed.Value() == "" && !editing {
 		// Placeholder hint on empty cells.
 		idx := r.edTop
-		hintText := "Go code… (enter to edit, shift+enter to run)"
+		what := "Go code…"
+		if c.runLang("") == notebook.GLR {
+			what = "glr script…"
+		}
+		hintText := what + " (enter to edit, shift+enter to run, l for " + string(c.baseLang().Other()) + ")"
 		if m.editable(c) {
-			hintText = "Go code… (enter to edit, shift+enter to run, e to ask AI)"
+			hintText = what + " (enter to edit, shift+enter to run, e to ask AI)"
 		}
 		// Narrow cells cut the hint rather than overflow the box.
 		hintText = ansi.Truncate(hintText, max(innerW-lipgloss.Width(ev.lines[0]), 0), "…")
@@ -600,6 +615,10 @@ func (m *Model) renderCell(i, width int) cellRender {
 		}
 	} else {
 		r.lines = append(r.lines, bar+blank+boxBottom(boxW, border))
+	}
+
+	for _, l := range m.diagLines(c, boxW-2) {
+		r.lines = append(r.lines, bar+blank+"  "+l)
 	}
 
 	// Outputs.
@@ -740,7 +759,11 @@ func (m *Model) convertAction(i int) (action, string, string) {
 	if m.cells[i].kind == notebook.Code {
 		return action{kind: actToMarkdown, cell: i}, "convert to markdown · m", "markdown"
 	}
-	return action{kind: actToCode, cell: i}, "convert to go code · y", "go"
+	lang := m.cells[i].lang
+	if lang == "" {
+		lang = m.lang
+	}
+	return action{kind: actToCode, cell: i}, "convert to " + string(lang) + " code · y", string(lang)
 }
 
 // cellActions appends the per-cell action buttons.
@@ -764,17 +787,23 @@ func (m *Model) cellActions(lb *lineBuilder, i int, frame lipgloss.Style, markdo
 	}
 	convAct, convTip, convTo := m.convertAction(i)
 	convIcon := "md"
-	if convTo == "go" {
-		convIcon = "go"
+	if convTo != "markdown" {
+		convIcon = convTo
 	}
 	btns := []btn{
 		run,
 		{convAct, "⇄" + convIcon, convTip, false},
+	}
+	if c.kind == notebook.Code && !markdown {
+		other := string(c.baseLang().Other())
+		btns = append(btns, btn{action{kind: actSwitchLang, cell: i}, "⇄" + other, "switch to " + other + " · l", false})
+	}
+	btns = append(btns, []btn{
 		{action{kind: actMoveUp, cell: i}, "↑", "move cell up · K", false},
 		{action{kind: actMoveDown, cell: i}, "↓", "move cell down · J", false},
 		{action{kind: actDuplicate, cell: i}, "⧉", "duplicate cell", false},
 		{action{kind: actDeleteCell, cell: i}, "✕", "delete cell · dd", true},
-	}
+	}...)
 	switch {
 	case !markdown && m.fixable(c):
 		btns = append([]btn{{action{kind: actFixCell, cell: i}, "✦ fix", "fix the error with AI (" + m.assistant.Model() + ") · f", false}}, btns...)
@@ -801,14 +830,16 @@ func (m *Model) cellActions(lb *lineBuilder, i int, frame lipgloss.Style, markdo
 	}
 }
 
-func langTitle(kind notebook.CellType) string {
-	switch kind {
+// cellTitle is the label on a cell's border: its type, or for code its
+// language.
+func cellTitle(c *Cell) string {
+	switch c.kind {
 	case notebook.Markdown:
 		return "markdown"
 	case notebook.Raw:
 		return "raw"
 	}
-	return "go"
+	return string(c.runLang(c.ed.Value()))
 }
 
 // renderOutputs renders the outputs of a cell, also returning the index of

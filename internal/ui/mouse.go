@@ -43,6 +43,7 @@ const (
 	actDeleteCell
 	actToMarkdown
 	actToCode
+	actSwitchLang
 	actClearOutput
 	actToggleOutput
 	actCopyOutput
@@ -545,7 +546,8 @@ func (m *Model) openContextMenu(x, y int) tea.Cmd {
 		menuItem{label: "Move down", key: "J", act: a(actMoveDown)},
 		menuItem{sep: true})
 	if c.kind == notebook.Code {
-		items = append(items, menuItem{label: "Convert to markdown", key: "m", act: a(actToMarkdown)})
+		items = append(items, menuItem{label: "Convert to markdown", key: "m", act: a(actToMarkdown)},
+			menuItem{label: "Switch to " + string(c.baseLang().Other()), key: "l", act: a(actSwitchLang)})
 		if len(c.outputs) > 0 {
 			items = append(items,
 				menuItem{label: "Copy output", act: a(actCopyOutput)},
@@ -665,6 +667,10 @@ func (m *Model) doAction(a action) tea.Cmd {
 		if validCell {
 			m.convertCell(a.cell, a.kind == actToCode)
 		}
+	case actSwitchLang:
+		if validCell {
+			return m.switchLang(a.cell)
+		}
 	case actClearOutput:
 		return m.commandKey(a.cell, "O")
 	case actFixCell:
@@ -706,7 +712,11 @@ func (m *Model) doAction(a action) tea.Cmd {
 			kind = notebook.Markdown
 		}
 		m.follow = true
-		m.insertCell(clamp(a.cell, 0, len(m.cells)), newCell(kind, ""))
+		c := newCell(kind, "")
+		if kind == notebook.Code {
+			c = m.newCodeCell()
+		}
+		m.insertCell(clamp(a.cell, 0, len(m.cells)), c)
 
 	case actCopyText, actCutText:
 		if !validCell {

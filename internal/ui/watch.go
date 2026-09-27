@@ -209,19 +209,20 @@ func (m *Model) applyReload(nb *notebook.Notebook, st diskState) tea.Cmd {
 		m.leaveEdit()
 	}
 
+	m.lang = nb.Lang()
 	cells := make([]*Cell, 0, len(nb.Cells))
 	for i, nc := range nb.Cells {
 		c := matched[i]
 		if c == nil {
-			c = fromNotebook(nc)
+			c = fromNotebook(nc, m.lang)
 		} else {
-			c.reload(nc)
+			c.reload(nc, m.lang)
 		}
 		cells = append(cells, c)
 		m.counter = max(m.counter, nc.ExecutionCount)
 	}
 	if len(cells) == 0 {
-		cells = []*Cell{newCell(notebook.Code, "")}
+		cells = []*Cell{newLangCell(notebook.Code, m.lang, "")}
 	}
 	m.cells = cells
 	m.meta = nb.Metadata
@@ -244,8 +245,9 @@ func (m *Model) applyReload(nb *notebook.Notebook, st diskState) tea.Cmd {
 	return m.setStatus(statusInfo, "reloaded %s from disk · kernel state kept", m.path)
 }
 
-// reload updates the cell in place from its on-disk version.
-func (c *Cell) reload(nc *notebook.Cell) {
+// reload updates the cell in place from its on-disk version; def is the
+// notebook's language.
+func (c *Cell) reload(nc *notebook.Cell, def notebook.Lang) {
 	if c.kind != nc.Type {
 		c.setKind(nc.Type)
 	}
@@ -255,6 +257,8 @@ func (c *Cell) reload(nc *notebook.Cell) {
 		c.ed.breakUndo()
 	}
 	c.metadata = nc.Metadata
+	c.lang = notebook.CellLang(nc.Metadata, def)
+	c.syncLang()
 	if c.count != nc.ExecutionCount || !slices.Equal(c.outputs, nc.Outputs) {
 		c.outputs, c.count = nc.Outputs, nc.ExecutionCount
 		c.outRev++

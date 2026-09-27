@@ -16,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
@@ -98,11 +99,22 @@ type Options struct {
 	SaveVim func(on bool) error
 	// AI configures the optional AI features. When nil, none is shown.
 	AI *AIConfig
+	// GLR runs glr (golars) cells (optional: without it they fail).
+	GLR *glr.Kernel
+	// GLRCompleter completes glr cells, and may also implement
+	// Documenter and Diagnoser (optional).
+	GLRCompleter Completer
 }
 
 // Model is the root Bubble Tea model.
 type Model struct {
-	k *kernel.Kernel
+	k   *kernel.Kernel
+	glr *glr.Kernel
+	// lang is the notebook's default cell language.
+	lang notebook.Lang
+
+	glrComp Completer
+	diagSeq int
 
 	completer Completer
 	comp      completionState
@@ -191,6 +203,7 @@ func New(opts Options) *Model {
 	}
 	m := &Model{
 		k: opts.Kernel, path: opts.Path, meta: nb.Metadata, completer: opts.Completer,
+		glr: opts.GLR, glrComp: opts.GLRCompleter, lang: nb.Lang(),
 		keys: newKeyMap(), follow: true, hoverCell: -1,
 	}
 	if opts.AI != nil {
@@ -206,11 +219,11 @@ func New(opts Options) *Model {
 	m.vim.enabled = opts.Vim
 	m.vim.save = opts.SaveVim
 	for _, c := range nb.Cells {
-		m.cells = append(m.cells, fromNotebook(c))
+		m.cells = append(m.cells, fromNotebook(c, m.lang))
 		m.counter = max(m.counter, c.ExecutionCount)
 	}
 	if len(m.cells) == 0 {
-		m.cells = []*Cell{newCell(notebook.Code, "")}
+		m.cells = []*Cell{newLangCell(notebook.Code, m.lang, "")}
 	}
 	m.spinner = spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	m.help = help.New()
@@ -292,6 +305,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case completionResultMsg:
 		return m, m.handleCompletionResult(msg)
+
+	case diagTickMsg:
+		return m, m.requestDiagnose(msg)
+
+	case diagResultMsg:
+		m.handleDiagResult(msg)
+		return m, nil
 
 	case infoResultMsg:
 		return m, m.handleInfoResult(msg)
@@ -479,9 +499,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		if !m.vimInsertMode() {
 			// esc just left vim's insert mode.
 			m.closeCompletion()
-			return cmd
+			return tea.Batch(cmd, m.scheduleDiagnose())
 		}
-		return tea.Batch(cmd, m.afterEditKey(msg, id, version))
+		return tea.Batch(cmd, m.afterEditKey(msg, id, version), m.scheduleDiagnose())
 	}
 	return m.handleCommandKey(msg)
 }
@@ -701,9 +721,11 @@ func (m *Model) handleCommandKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.enterEdit()
 	case key.Matches(msg, k.InsertAbove):
-		m.insertCell(m.sel, newCell(notebook.Code, ""))
+		m.insertCell(m.sel, m.newCodeCell())
 	case key.Matches(msg, k.InsertBelow):
-		m.insertCell(m.sel+1, newCell(notebook.Code, ""))
+		m.insertCell(m.sel+1, m.newCodeCell())
+	case key.Matches(msg, k.SwitchLang):
+		return m.switchLang(m.sel)
 	case key.Matches(msg, k.Delete):
 		if pending == "d" {
 			m.deleteCell(m.sel)
@@ -794,10 +816,50 @@ func (m *Model) convertCell(i int, toCode bool) {
 	if m.running != nil && m.running.cellID == c.id {
 		return
 	}
+	if c.lang == "" {
+		c.lang = m.lang
+	}
 	c.setKind(kind)
 	c.mdOut = ""
 	m.sel = i
 	m.dirty = true
+}
+
+// newCodeCell returns an empty code cell in the language of the selected
+// cell, or the notebook's.
+func (m *Model) newCodeCell() *Cell {
+	lang := m.lang
+	if len(m.cells) > 0 {
+		if c := m.cur(); c.kind == notebook.Code && c.lang != "" {
+			lang = c.lang
+		}
+	}
+	return newLangCell(notebook.Code, lang, "")
+}
+
+// switchLang switches a code cell between go and glr.
+func (m *Model) switchLang(i int) tea.Cmd {
+	c := m.cells[i]
+	if c.kind != notebook.Code {
+		return m.setStatus(statusInfo, "only code cells have a language")
+	}
+	if m.running != nil && m.running.cellID == c.id {
+		return nil
+	}
+	if c.lang == "" {
+		c.lang = m.lang
+	}
+	c.lang = c.lang.Other()
+	c.diags, c.diagSrc = nil, ""
+	c.syncLang()
+	m.closeCompletion()
+	m.closeInfo()
+	m.dirty = true
+	msg := "cell language: " + string(c.lang)
+	if l, ok := notebook.Magic(c.ed.Value()); ok && l != c.lang {
+		msg += " (its %%" + string(l) + " magic still wins)"
+	}
+	return m.setStatus(statusInfo, "%s", msg)
 }
 
 func (m *Model) insertCell(i int, c *Cell) {
@@ -814,7 +876,7 @@ func (m *Model) deleteCell(i int) {
 	m.trash = append(m.trash, trashed{cell: c, index: i})
 	m.cells = append(m.cells[:i], m.cells[i+1:]...)
 	if len(m.cells) == 0 {
-		m.cells = []*Cell{newCell(notebook.Code, "")}
+		m.cells = []*Cell{newLangCell(notebook.Code, m.lang, "")}
 	}
 	m.sel = clamp(m.sel, 0, len(m.cells)-1)
 	m.dirty = true
@@ -832,10 +894,10 @@ func (m *Model) runSelected(advance, insert bool) tea.Cmd {
 	m.leaveEdit()
 	switch {
 	case insert:
-		m.insertCell(m.sel+1, newCell(notebook.Code, ""))
+		m.insertCell(m.sel+1, m.newCodeCell())
 	case advance:
 		if m.sel == len(m.cells)-1 {
-			m.insertCell(m.sel+1, newCell(notebook.Code, ""))
+			m.insertCell(m.sel+1, m.newCodeCell())
 		} else {
 			m.sel++
 		}
@@ -896,12 +958,27 @@ func (m *Model) startNext() tea.Cmd {
 		ctx, cancel := context.WithCancel(context.Background())
 		rs := &runState{id: m.runSeq, cellID: c.id, cancel: cancel, ch: make(chan kernel.Event, 1024)}
 		m.running = rs
-		src, name := c.ed.Value(), fmt.Sprintf("In[%d]", c.count)
-		// The program's stdin and widget events are pipes fed by the UI.
+		name := fmt.Sprintf("In[%d]", c.count)
+		lang, src := notebook.Resolve(c.ed.Value(), c.baseLang())
 		rs.session = htmlview.NewSession()
+		emit := func(e kernel.Event) { rs.ch <- e }
+		if lang == notebook.GLR {
+			glrK := m.glr
+			go func() {
+				if glrK == nil {
+					rs.err = errors.New("glr cells need golars")
+				} else {
+					rs.err = glrK.Execute(ctx, c.id, name, src, emit)
+				}
+				cancel()
+				close(rs.ch)
+			}()
+			return waitRun(rs)
+		}
+		// The program's stdin and widget events are pipes fed by the UI.
 		in, closeIn := m.startInput()
 		go func() {
-			rs.err = m.k.ExecuteInput(ctx, c.id, name, src, in, func(e kernel.Event) { rs.ch <- e })
+			rs.err = m.k.ExecuteInput(ctx, c.id, name, src, in, emit)
 			closeIn()
 			cancel()
 			close(rs.ch)
@@ -989,13 +1066,17 @@ func (m *Model) handleRunEvents(msg runEventsMsg) tea.Cmd {
 		case errors.Is(rs.err, kernel.ErrCompile):
 			c.status = statusFailed
 			c.errMsg = "compile error"
+		case errors.Is(rs.err, kernel.ErrFailed):
+			c.status = statusFailed
+			c.errMsg = "error"
 		default:
 			c.status = statusFailed
 			c.errMsg = rs.err.Error()
 			c.appendOutput(notebook.Error, rs.err.Error())
 		}
-		if c.status == statusFailed && errors.Is(rs.err, kernel.ErrCompile) {
-			// Don't keep running the rest of a "run all" after a compile error.
+		if c.status == statusFailed && (errors.Is(rs.err, kernel.ErrCompile) || errors.Is(rs.err, kernel.ErrFailed)) {
+			// Don't keep running the rest of a "run all" after a compile
+			// error, or a glr error: later cells build on the state.
 			for _, id := range m.queue {
 				if _, qc := m.cellByID(id); qc != nil {
 					qc.status = statusIdle
@@ -1022,6 +1103,9 @@ func (m *Model) interrupt() tea.Cmd {
 
 func (m *Model) restart() tea.Cmd {
 	m.interrupt()
+	if m.glr != nil {
+		m.glr.Restart()
+	}
 	err := m.k.Reset()
 	m.counter = 0
 	for _, c := range m.cells {
@@ -1030,13 +1114,16 @@ func (m *Model) restart() tea.Cmd {
 	if err != nil {
 		return m.setStatus(statusError, "kernel restarted, but saved variables remain: %v", err)
 	}
+	if m.glr != nil {
+		return m.setStatus(statusSuccess, "kernel restarted · declarations and glr frames cleared")
+	}
 	return m.setStatus(statusSuccess, "kernel restarted · all declarations cleared")
 }
 
 func (m *Model) toNotebook() *notebook.Notebook {
 	nb := &notebook.Notebook{Metadata: m.meta}
 	for _, c := range m.cells {
-		nb.Cells = append(nb.Cells, c.toNotebook())
+		nb.Cells = append(nb.Cells, c.toNotebook(m.lang))
 	}
 	return nb
 }

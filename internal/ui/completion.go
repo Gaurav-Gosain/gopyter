@@ -79,9 +79,50 @@ func (m *Model) closeCompletion() {
 	m.comp.seq++ // drop in-flight responses
 }
 
+// completerFor returns the completer for a cell's language: gopls (or
+// basic) for Go, golars-lsp (or basic) for glr.
+func (m *Model) completerFor(c *Cell) Completer {
+	if c.kind == notebook.Code && c.runLang(c.ed.Value()) == notebook.GLR {
+		return m.glrComp
+	}
+	return m.completer
+}
+
+// completionRequest describes the cursor position in c for a completer.
+// A glr cell comes with the notebook's earlier glr cells, whose frames
+// and columns golars-lsp should know.
+func (m *Model) completionRequest(c *Cell, row, col int, manual bool, trigger rune) complete.Request {
+	lang, src := notebook.Resolve(c.ed.Value(), c.baseLang())
+	req := complete.Request{CellID: c.id, Src: src, Row: row, Col: col, Manual: manual, Trigger: trigger, Lang: string(lang)}
+	if lang == notebook.GLR {
+		req.Before = m.glrBefore(c)
+	}
+	return req
+}
+
+// glrBefore joins the glr cells above c, as golars-lsp context.
+func (m *Model) glrBefore(c *Cell) string {
+	var b strings.Builder
+	for _, o := range m.cells {
+		if o == c {
+			break
+		}
+		if o.kind != notebook.Code {
+			continue
+		}
+		if lang, src := notebook.Resolve(o.ed.Value(), o.baseLang()); lang == notebook.GLR {
+			b.WriteString(src)
+			if !strings.HasSuffix(src, "\n") {
+				b.WriteByte('\n')
+			}
+		}
+	}
+	return b.String()
+}
+
 // scheduleCompletion requests completions after a short pause in typing.
 func (m *Model) scheduleCompletion(trigger rune) tea.Cmd {
-	if m.completer == nil {
+	if m.completerFor(m.cur()) == nil {
 		return nil
 	}
 	m.comp.seq++
@@ -93,10 +134,11 @@ func (m *Model) scheduleCompletion(trigger rune) tea.Cmd {
 
 // requestCompletion asks the completer for completions at the cursor.
 func (m *Model) requestCompletion(trigger rune, manual bool) tea.Cmd {
-	if m.completer == nil || m.mode != modeEdit {
+	c := m.cur()
+	completer := m.completerFor(c)
+	if completer == nil || m.mode != modeEdit {
 		return nil
 	}
-	c := m.cur()
 	row, col := c.ed.Cursor()
 	if manual {
 		m.comp.seq++
@@ -109,8 +151,7 @@ func (m *Model) requestCompletion(trigger rune, manual bool) tea.Cmd {
 		}
 	}
 	seq := m.comp.seq
-	req := complete.Request{CellID: c.id, Src: c.ed.Value(), Row: row, Col: col, Manual: manual, Trigger: trigger}
-	completer := m.completer
+	req := m.completionRequest(c, row, col, manual, trigger)
 	timeout := 3 * time.Second
 	if manual {
 		timeout = 30 * time.Second // the first request may wait for gopls to load
@@ -317,10 +358,10 @@ func (m *Model) completionKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 func (m *Model) isCompletionTrigger(msg tea.KeyPressMsg) bool {
 	switch msg.String() {
 	case "ctrl+space", "ctrl+@":
-		return m.completer != nil && m.cur().kind == notebook.Code
+		return m.completerFor(m.cur()) != nil && m.cur().kind == notebook.Code
 	case "tab":
 		ed := m.cur().ed
-		if m.completer == nil || m.cur().kind != notebook.Code || ed.SelectionSpansLines() || !ed.InCodeContext() {
+		if m.completerFor(m.cur()) == nil || m.cur().kind != notebook.Code || ed.SelectionSpansLines() || !ed.InCodeContext() {
 			return false
 		}
 		word, prev := ed.WordBeforeCursor()
@@ -332,7 +373,7 @@ func (m *Model) isCompletionTrigger(msg tea.KeyPressMsg) bool {
 // afterEditKey decides whether an edit should open, update or close the
 // completion popup.
 func (m *Model) afterEditKey(msg tea.KeyPressMsg, cellID string, version int) tea.Cmd {
-	if m.completer == nil {
+	if m.completerFor(m.cur()) == nil {
 		return nil
 	}
 	if m.mode != modeEdit || m.cur().id != cellID || m.cur().kind != notebook.Code {

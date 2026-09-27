@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -16,10 +18,12 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/gopyter/internal/complete"
 	"github.com/Gaurav-Gosain/gopyter/internal/config"
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
 	"github.com/Gaurav-Gosain/gopyter/internal/runner"
 	"github.com/Gaurav-Gosain/gopyter/internal/ui"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
@@ -43,15 +47,91 @@ func appVersion() string {
 	return "dev"
 }
 
-func loadNotebook(path string) (*notebook.Notebook, error) {
+// loadNotebook opens a notebook, or starts one in lang when path is
+// empty or doesn't exist yet.
+func loadNotebook(path string, lang notebook.Lang) (*notebook.Notebook, error) {
 	if path == "" {
-		return notebook.New(), nil
+		return notebook.NewLang(lang), nil
 	}
 	nb, err := notebook.Load(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return notebook.New(), nil
+		return notebook.NewLang(lang), nil
 	}
 	return nb, err
+}
+
+// parseLang reads the --lang flag.
+func parseLang(s string) (notebook.Lang, error) {
+	l, ok := notebook.ParseLang(s)
+	if !ok {
+		return "", fmt.Errorf("unknown language %q (use go or glr)", s)
+	}
+	return l, nil
+}
+
+// importScript offers to turn a .glr script into a notebook next to it.
+// It returns the notebook and the path to save it at.
+func importScript(cmd *cobra.Command, path string) (*notebook.Notebook, string, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	target := strings.TrimSuffix(path, filepath.Ext(path)) + ".ipynb"
+	if _, err := os.Stat(target); err == nil {
+		return nil, "", fmt.Errorf("%s is a glr script, and %s already exists: open that instead", path, target)
+	}
+	if term.IsTerminal(os.Stdin.Fd()) {
+		cmd.PrintErrf("%s is a glr script. Import it as the notebook %s? [Y/n] ", path, target)
+		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n') // EOF means the default
+		if a := strings.ToLower(strings.TrimSpace(answer)); a != "" && a != "y" && a != "yes" {
+			return nil, "", errors.New("not imported")
+		}
+	}
+	return glr.ImportScript(string(src)), target, nil
+}
+
+// session holds what runs cells: the Go kernel, and the glr kernel with
+// its completer.
+type session struct {
+	k    *kernel.Kernel
+	glr  *glr.Kernel
+	comp *glr.Completer
+}
+
+func newSession(workdir string) (*session, error) {
+	k, err := kernel.New(workdir)
+	if err != nil {
+		return nil, err
+	}
+	s := &session{k: k, glr: &glr.Kernel{BridgeDir: k.BridgeDir()}}
+	s.comp = glr.NewCompleter(func() string { return s.glr.Dir })
+	return s, nil
+}
+
+// close stops golars and removes the kernel workspace, reporting (but not
+// failing on) errors.
+func (s *session) close() {
+	if err := s.comp.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "gopyter: stopping golars-lsp: %v\n", err)
+	}
+	if err := s.glr.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "gopyter: stopping golars: %v\n", err)
+	}
+	closeKernel(s.k)
+}
+
+// notebookDir is the directory of a notebook file, where glr cells
+// resolve relative paths (as Jupyter kernels run in the notebook's
+// directory).
+func notebookDir(path string) string {
+	dir := "."
+	if path != "" {
+		dir = filepath.Dir(path)
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
 }
 
 func rootCmd() *cobra.Command {
@@ -62,6 +142,7 @@ func rootCmd() *cobra.Command {
 		noComplete bool
 		vim        bool
 		model      string
+		langFlag   string
 	)
 	cmd := &cobra.Command{
 		Use:   "gopyter [notebook.ipynb]",
@@ -81,15 +162,26 @@ func rootCmd() *cobra.Command {
 			if len(args) == 1 {
 				path = args[0]
 			}
-			nb, err := loadNotebook(path)
+			lang, err := parseLang(langFlag)
 			if err != nil {
 				return err
 			}
-			k, err := kernel.New(workdir)
+			var nb *notebook.Notebook
+			if strings.EqualFold(filepath.Ext(path), ".glr") {
+				nb, path, err = importScript(cmd, path)
+			} else {
+				nb, err = loadNotebook(path, lang)
+			}
 			if err != nil {
 				return err
 			}
-			defer closeKernel(k)
+			sess, err := newSession(workdir)
+			if err != nil {
+				return err
+			}
+			defer sess.close()
+			k := sess.k
+			sess.glr.Dir = notebookDir(path)
 			settings := loadSettings(cmd)
 			name, err := resolveTheme(cmd, theme, settings)
 			if err != nil {
@@ -111,10 +203,12 @@ func rootCmd() *cobra.Command {
 				// query can't race the program's input reader.
 				LightBackground: !lipgloss.HasDarkBackground(os.Stdin, os.Stdout),
 			}
+			opts.GLR = sess.glr
 			if !noComplete {
 				engine := complete.New(k)
 				defer func() { _ = engine.Close() }()
 				opts.Completer = engine
+				opts.GLRCompleter = sess.comp
 			}
 			opts.AI = newAI(aiModel, aiOn)
 			return ui.Run(cmd.Context(), opts)
@@ -125,6 +219,7 @@ func rootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&syntax, "syntax-theme", "", "chroma syntax highlighting style, overriding the theme's")
 	cmd.Flags().BoolVar(&noComplete, "no-complete", false, "disable code completion (gopls)")
 	cmd.Flags().BoolVar(&vim, "vim", false, "use vim key bindings in edit mode for this session (toggle and save with V); the saved setting is used by default")
+	cmd.Flags().StringVar(&langFlag, "lang", "go", "language of a new notebook's cells: go, or glr for a golars notebook (saved with golars-kernel's kernelspec)")
 	cmd.Flags().StringVar(&model, "model", "", "AI model for this session, as provider/model or a provider name, or off (see 'gopyter model'); the saved one is used by default")
 
 	cmd.AddCommand(runCmd(&workdir), themesCmd(), modelCmd())
@@ -137,23 +232,44 @@ func runCmd(workdir *string) *cobra.Command {
 		failFast bool
 	)
 	cmd := &cobra.Command{
-		Use:   "run <notebook.ipynb>",
+		Use:   "run <notebook.ipynb | script.glr>",
 		Short: "Execute every code cell of a notebook and print the outputs",
-		Args:  cobra.ExactArgs(1),
+		Long: "Execute every code cell of a notebook and print the outputs.\n\n" +
+			"Go cells run in the current directory; glr cells run in the notebook's directory,\n" +
+			"like a Jupyter kernel. A .glr script runs as a notebook of its blocks.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			nb, err := notebook.Load(args[0])
+			var nb *notebook.Notebook
+			var err error
+			isScript := strings.EqualFold(filepath.Ext(args[0]), ".glr")
+			if isScript {
+				var src []byte
+				if src, err = os.ReadFile(args[0]); err == nil {
+					nb = glr.ImportScript(string(src))
+				}
+			} else {
+				nb, err = notebook.Load(args[0])
+			}
 			if err != nil {
 				return err
 			}
-			k, err := kernel.New(*workdir)
+			if isScript && save {
+				return errors.New("--save needs a notebook; open the script with gopyter to import it")
+			}
+			sess, err := newSession(*workdir)
 			if err != nil {
 				return err
 			}
-			defer closeKernel(k)
+			defer sess.close()
+			k := sess.k
 			if dir, err := os.Getwd(); err == nil {
 				k.RunDir = dir
 			}
-			failed := runner.Run(cmd.Context(), k, nb, cmd.OutOrStdout(), cmd.InOrStdin(), failFast)
+			sess.glr.Dir = notebookDir(args[0])
+			if w, _, err := term.GetSize(os.Stdout.Fd()); err == nil && w > 20 {
+				runner.TableWidth = w
+			}
+			failed := runner.Run(cmd.Context(), k, sess.glr, nb, cmd.OutOrStdout(), cmd.InOrStdin(), failFast)
 			if save {
 				if err := nb.Save(args[0]); err != nil {
 					return err

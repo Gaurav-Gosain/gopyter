@@ -237,7 +237,9 @@ func (c *Completer) sync(client *lsp.Client, req complete.Request) (Doc, error) 
 }
 
 // Status reports whether golars-lsp is in use, and why not otherwise.
+// It starts golars-lsp in the background, without waiting.
 func (c *Completer) Status() (bool, string) {
+	c.start()
 	select {
 	case <-c.ready:
 		if c.startErr != nil {

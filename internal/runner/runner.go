@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
@@ -158,7 +159,10 @@ func (e *events) close() {
 // Run executes all code cells of nb, storing outputs in the notebook and
 // printing them to w. Programs read stdin (nil for no input). It returns
 // the number of failed cells.
-func Run(ctx context.Context, k *kernel.Kernel, nb *notebook.Notebook, w io.Writer, stdin io.Reader, failFast bool) int {
+// glr cells run in g, which may be nil when golars isn't installed: they
+// fail then.
+func Run(ctx context.Context, k *kernel.Kernel, g *glr.Kernel, nb *notebook.Notebook, w io.Writer, stdin io.Reader, failFast bool) int {
+	def := nb.Lang()
 	// Images are drawn with colored half blocks, which are noise without
 	// colors (e.g. when the output is redirected to a file). The same goes
 	// for redrawing DisplayID outputs in place.
@@ -219,7 +223,17 @@ func Run(ctx context.Context, k *kernel.Kernel, nb *notebook.Notebook, w io.Writ
 		}
 		ev := newEvents()
 		start := time.Now()
-		err := k.ExecuteInput(ctx, c.ID, name, c.Source, kernel.Input{Stdin: stdin, Events: ev.reader()}, func(e kernel.Event) {
+		lang, src := notebook.Resolve(c.Source, notebook.CellLang(c.Metadata, def))
+		exec := func(emit func(kernel.Event)) error {
+			if lang != notebook.GLR {
+				return k.ExecuteInput(ctx, c.ID, name, src, kernel.Input{Stdin: stdin, Events: ev.reader()}, emit)
+			}
+			if g == nil {
+				return errors.New("glr cells need golars")
+			}
+			return g.Execute(ctx, c.ID, name, src, emit)
+		}
+		err := exec(func(e kernel.Event) {
 			if e.Kind == kernel.Op {
 				r := ev.session.Apply(c.Outputs, e.Text)
 				if r.Changed {
@@ -263,11 +277,13 @@ func Run(ctx context.Context, k *kernel.Kernel, nb *notebook.Notebook, w io.Writ
 		bl.finish()
 		if err != nil {
 			failed++
-			if !errors.Is(err, kernel.ErrCompile) {
+			if !errors.Is(err, kernel.ErrCompile) && !errors.Is(err, kernel.ErrFailed) {
 				appendOut(notebook.Error, err.Error(), "")
 			}
 			writeln(w, errStyle.Render("✗ "+err.Error()))
-			if failFast || errors.Is(err, kernel.ErrInterrupted) {
+			// Later glr cells build on the state a failed one didn't
+			// make.
+			if failFast || errors.Is(err, kernel.ErrInterrupted) || lang == notebook.GLR {
 				return failed
 			}
 		} else {
