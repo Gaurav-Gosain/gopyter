@@ -3,9 +3,12 @@ package runner
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Gaurav-Gosain/gopyter/internal/glr"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
@@ -108,5 +111,50 @@ func TestBlocksRedrawOnTerminal(t *testing.T) {
 	want := "one\ntwo\n\x1b[2A\r\x1b[Jthree\nfour\nhtml\nfive\n"
 	if got := out.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A mixed notebook runs its glr cells in golars and saves their tables
+// with text/html. Needs golars; skipped without it.
+func TestRunGLR(t *testing.T) {
+	if _, err := glr.FindGolars(); err != nil || testing.Short() {
+		t.Skip("golars not found")
+	}
+	k, err := kernel.New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = k.Close() })
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "t.csv"), []byte("a,b\n1,x\n2,\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := &glr.Kernel{Dir: dir, BridgeDir: k.BridgeDir()}
+	t.Cleanup(func() { _ = g.Close() })
+	nb := notebook.NewLang(notebook.GLR)
+	nb.Cells = []*notebook.Cell{
+		{ID: "a", Type: notebook.Code, Source: "load t.csv\n%export t"},
+		{ID: "b", Type: notebook.Code, Source: "%%go\nfmt.Println(nb.BridgePath(\"t\") != \"\")"},
+		{ID: "c", Type: notebook.Code, Source: "frob"},
+	}
+	var out bytes.Buffer
+	if failed := Run(context.Background(), k, g, nb, &out, nil, false); failed != 1 {
+		t.Fatalf("failed = %d\n%s", failed, out.String())
+	}
+	outs := nb.Cells[0].Outputs
+	if len(outs) != 2 || outs[1].Kind != notebook.TableOut {
+		t.Fatalf("outputs %+v", outs)
+	}
+	if nb.Cells[1].Outputs[0].Text != "true\n" {
+		t.Fatalf("go cell %+v", nb.Cells[1].Outputs)
+	}
+	if o := nb.Cells[2].Outputs; len(o) != 1 || o[0].Kind != notebook.Error || !strings.Contains(o[0].Text, "In[3]:1") {
+		t.Fatalf("error %+v", o)
+	}
+	if !strings.Contains(out.String(), "shape: (2, 2)") {
+		t.Fatalf("output:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(k.BridgeDir(), "t.arrow")); err != nil {
+		t.Fatalf("export: %v", err)
 	}
 }
