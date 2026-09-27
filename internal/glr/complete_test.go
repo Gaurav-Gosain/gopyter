@@ -61,8 +61,52 @@ func TestBasicCompletion(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 	res = basic(complete.Request{Src: "join b o", Row: 0, Col: 8})
-	if len(res.Items) != 2 || res.Items[0].Label != "on" || res.Items[1].Label != "or" {
+	if len(res.Items) < 2 || res.Items[0].Label != "on" || res.Items[1].Label != "or" ||
+		res.Items[0].Kind != complete.KindKeyword {
 		t.Fatalf("keywords %+v", res)
+	}
+	labels := func(res complete.Result) map[string]bool {
+		out := map[string]bool{}
+		for _, it := range res.Items {
+			out[it.Label] = true
+		}
+		return out
+	}
+	// Expression functions, namespaced functions and methods.
+	for _, tc := range []struct {
+		src      string
+		want     []string
+		unwanted []string
+	}{
+		{"with y = coal", []string{"coalesce"}, nil},
+		{"with y = dt.ye", []string{"year"}, []string{"round"}},
+		{"with y = ts.dt.ye", []string{"year"}, nil},
+		{"with y = x.ro", []string{"round"}, []string{"year"}},
+		{"with y = x.", []string{"round", "str", "dt"}, nil},
+		{"with y = str.to_upper", []string{"to_uppercase"}, nil},
+		{"filter x no", []string{"not", "not_like"}, nil},
+		{"filter a whe", []string{"when"}, nil},
+		{"load data/x.", nil, []string{"round"}},
+	} {
+		got := labels(basic(complete.Request{Src: tc.src, Row: 0, Col: len(tc.src)}))
+		for _, w := range tc.want {
+			if !got[w] {
+				t.Errorf("%q: no %q in %v", tc.src, w, got)
+			}
+		}
+		for _, w := range tc.unwanted {
+			if got[w] {
+				t.Errorf("%q: unexpected %q", tc.src, w)
+			}
+		}
+	}
+	for _, name := range []string{"join_asof", "group_by_dynamic", "to_dummies"} {
+		if !labels(basic(complete.Request{Src: name[:5], Row: 0, Col: 5}))[name] {
+			t.Errorf("no command %q", name)
+		}
+	}
+	if md := basicHover(complete.Request{Src: "groupby_dynamic ts every 1h", Row: 0, Col: 2}); !strings.Contains(md, "group_by_dynamic") {
+		t.Fatalf("alias hover %q", md)
 	}
 	if md := basicHover(complete.Request{Src: "  .groupby a b:sum", Row: 0, Col: 12}); !strings.Contains(md, "groupby <k1") {
 		t.Fatalf("hover %q", md)

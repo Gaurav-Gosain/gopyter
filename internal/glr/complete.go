@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -448,18 +449,19 @@ func wordBefore(req complete.Request) int {
 	return n
 }
 
-// basic completes command names at the start of a line and keywords
-// after it.
+// basic completes command names at the start of a line; after it,
+// keywords and expression functions, and after a `.` the methods of a
+// value (x.ro -> round) or of a namespace (dt.ye, ts.dt.ye -> year).
 func basic(req complete.Request) complete.Result {
 	_, before := cursorLine(req)
 	n := wordBefore(req)
 	prefix := string(before[len(before)-n:])
 	res := complete.Result{Source: "basic", Replace: n}
-	if prefix == "" && !req.Manual {
-		return res
-	}
 	head := strings.TrimLeft(string(before[:len(before)-n]), " \t.")
 	if head == "" {
+		if prefix == "" && !req.Manual {
+			return res
+		}
 		for _, c := range Commands {
 			if strings.HasPrefix(c.Name, prefix) {
 				res.Items = append(res.Items, complete.Item{
@@ -470,12 +472,61 @@ func basic(req complete.Request) complete.Result {
 		}
 		return res
 	}
-	for _, kw := range keywords {
-		if strings.HasPrefix(kw, prefix) {
-			res.Items = append(res.Items, complete.Item{Label: kw, Insert: kw, Kind: complete.KindKeyword, Replace: n})
+	add := func(names []string, detail string, kind complete.Kind) {
+		for _, name := range names {
+			if strings.HasPrefix(name, prefix) {
+				res.Items = append(res.Items, complete.Item{Label: name, Detail: detail, Insert: name, Kind: kind, Replace: n})
+			}
 		}
 	}
+	rest := before[:len(before)-n]
+	if cmd := findCommand(strings.Fields(head)[0]); cmd != nil && cmd.ArgKind == "path" {
+		// A path such as data/orders.csv: no member completion.
+	} else if ns, isMember := memberContext(rest); isMember {
+		if ns != "" {
+			add(Functions[ns], ns+" function", complete.KindMethod)
+		} else {
+			add(namespaces, "namespace", complete.KindPackage)
+			add(Functions[""], "method", complete.KindMethod)
+		}
+		return res
+	}
+	if prefix == "" && !req.Manual {
+		return res
+	}
+	add(keywords, "", complete.KindKeyword)
+	add(Functions["free"], "function", complete.KindFunc)
+	add(namespaces, "namespace", complete.KindPackage)
+	add(Functions[""], "function", complete.KindFunc)
 	return res
+}
+
+// memberContext reports whether the text before the current word ends
+// in a member access `.`, and when the value before the dot is a
+// namespace (dt. or ts.dt.), which one.
+func memberContext(rest []rune) (ns string, ok bool) {
+	if len(rest) == 0 || rest[len(rest)-1] != '.' {
+		return "", false
+	}
+	end := len(rest) - 1
+	start := end
+	for start > 0 && isWord(rest[start-1]) {
+		start--
+	}
+	if start == end {
+		// `).` or `].`: a method of an expression.
+		return "", end > 0 && (rest[end-1] == ')' || rest[end-1] == ']')
+	}
+	word := string(rest[start:end])
+	if word[0] >= '0' && word[0] <= '9' {
+		return "", false
+	}
+	// dt. and ts.dt. both lead to the dt functions. name. may also be
+	// a column, but its namespace functions are the likelier completion.
+	if slices.Contains(namespaces, word) {
+		return word, true
+	}
+	return "", true
 }
 
 // basicHover documents the command of the cursor's line.
@@ -485,10 +536,12 @@ func basicHover(req complete.Request) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	for _, c := range Commands {
-		if c.Name == fields[0] {
-			return "```glr\n" + c.Signature + "\n```\n\n" + c.Summary
+	if c := findCommand(fields[0]); c != nil {
+		md := "```glr\n" + c.Signature + "\n```\n\n" + c.Summary
+		if len(c.Aliases) > 0 {
+			md += "\n\nAliases: " + strings.Join(c.Aliases, ", ")
 		}
+		return md
 	}
 	return ""
 }
