@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 	"github.com/Gaurav-Gosain/gopyter/internal/termimg"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
@@ -819,7 +820,7 @@ func (m *Model) renderOutputs(c *Cell, width int, live bool, focus string) ([]st
 	var widgets []htmlview.Widget
 	resultAt := -1
 	for _, o := range c.outputs {
-		if (o.Kind == notebook.Result || o.Kind == notebook.ImageOut) && resultAt < 0 {
+		if (o.Kind == notebook.Result || o.Kind == notebook.ImageOut || o.Kind == notebook.TableOut) && resultAt < 0 {
 			resultAt = len(out)
 		}
 		switch o.Kind {
@@ -832,6 +833,13 @@ func (m *Model) renderOutputs(c *Cell, width int, live bool, focus string) ([]st
 				widgets = append(widgets, w)
 			}
 			out = append(out, lines...)
+		case notebook.TableOut:
+			tb, err := table.Decode(o.Text)
+			if err != nil {
+				out = append(out, t.errorBar.Render("┃ ")+t.errorText.Render("can't show table: "+err.Error()))
+				continue
+			}
+			out = append(out, table.Render(tb.Table, width, m.tableStyles)...)
 		case notebook.Stdout:
 			out = append(out, termLines(o.Text, t.stdout, width)...)
 		case notebook.Stderr:

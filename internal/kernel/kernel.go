@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 	"golang.org/x/tools/imports"
 )
 
@@ -47,6 +48,9 @@ const (
 	// HTML, a widget value, a request for input or for a reply (see
 	// internal/htmlview).
 	Op
+	// Table is a golars DataFrame or Series: Text is a table.Output
+	// (JSON) with the table, its HTML and plain text.
+	Table
 )
 
 // Event is a piece of output streamed from an execution.
@@ -258,6 +262,9 @@ func New(dir string) (*Kernel, error) {
 	if err := k.setupRuntime(context.Background()); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(k.BridgeDir(), 0o755); err != nil {
+		return nil, err
+	}
 	if out, err := k.goCmd(context.Background(), "env", "GOVERSION").Output(); err == nil {
 		k.goVersion = strings.TrimSpace(string(out))
 	} else {
@@ -307,6 +314,10 @@ func (k *Kernel) goCmd(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	return cmd
 }
+
+// BridgeDir holds the Arrow IPC files through which glr and Go cells
+// share frames (nb.BridgePath in Go, %export and %import in glr).
+func (k *Kernel) BridgeDir() string { return filepath.Join(k.Dir, "gopyter_bridge") }
 
 // CacheDir is where Cache and CacheErr store values.
 func (k *Kernel) CacheDir() string { return filepath.Join(k.Dir, "gopyter_cache") }
@@ -405,6 +416,7 @@ func (k *Kernel) Remove(names ...string) []string {
 func (k *Kernel) environ() []string {
 	env := os.Environ()
 	env = append(env, "GOPYTER_CACHE_DIR="+k.CacheDir(), "GOPYTER_VARS_DIR="+k.VarsDir(),
+		"GOPYTER_BRIDGE_DIR="+k.BridgeDir(),
 		// As GoNB defines them.
 		"GONB_DIR="+k.RunDir, "GONB_TMP_DIR="+k.Dir)
 	for key, v := range k.env {
@@ -894,12 +906,19 @@ func (k *Kernel) run(ctx context.Context, bin string, args []string, in Input, e
 
 // emitMessage emits a rich message (the JSON of package wire's send).
 func emitMessage(msg []byte, emit func(Event)) {
-	var m struct{ Mime, Data, ID, Op string }
+	var m struct {
+		Mime, Data, ID, Op string
+		Bundle             map[string]string
+	}
 	if json.Unmarshal(msg, &m) != nil {
 		return
 	}
 	if m.Op != "" {
 		emit(Event{Kind: Op, Text: string(msg)})
+		return
+	}
+	if m.Bundle != nil {
+		emit(BundleEvent(m.Bundle, m.ID))
 		return
 	}
 	kind := Result
@@ -912,6 +931,24 @@ func emitMessage(msg []byte, emit func(Event)) {
 		kind = HTML
 	}
 	emit(Event{Kind: kind, Text: m.Data, ID: m.ID})
+}
+
+// BundleEvent turns a mime bundle (from a value's MimeBundle method) into
+// the event for its richest form gopyter shows: a golars table, HTML,
+// markdown, an image or plain text.
+func BundleEvent(bundle map[string]string, id string) Event {
+	if out, ok := table.FromBundle(bundle); ok {
+		return Event{Kind: Table, Text: out.Encode(), ID: id}
+	}
+	for _, f := range []struct {
+		mime string
+		kind EventKind
+	}{{"text/html", HTML}, {"text/markdown", Markdown}, {"image/png", Image}} {
+		if d, ok := bundle[f.mime]; ok {
+			return Event{Kind: f.kind, Text: d, ID: id}
+		}
+	}
+	return Event{Kind: Result, Text: bundle["text/plain"], ID: id}
 }
 
 func pump(r io.Reader, kind EventKind, emit func(Event)) {

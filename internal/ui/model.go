@@ -20,6 +20,7 @@ import (
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 )
 
 type mode int
@@ -142,6 +143,8 @@ type Model struct {
 	themes   themeState
 	// htmlStyles draw HTML outputs; derived from the theme.
 	htmlStyles htmlview.Styles
+	// tableStyles draw golars tables; derived from the theme.
+	tableStyles table.Styles
 	// md renders markdown outputs and the info popup; mdPanel renders
 	// markdown cells, which sit on a panel of their own background.
 	md, mdPanel *markdown.Renderer
@@ -959,6 +962,8 @@ func (m *Model) handleRunEvents(msg runEventsMsg) tea.Cmd {
 				kind = notebook.Error
 			case kernel.HTML:
 				kind = notebook.HTMLOut
+			case kernel.Table:
+				kind = notebook.TableOut
 			}
 			if e.ID != "" {
 				c.setOutput(kind, e.Text, e.ID)

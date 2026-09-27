@@ -79,6 +79,20 @@ func Display(mime, data, plain, id string) {
 	}
 }
 
+// Bundle shows a value given as mime data (mime type to content, as a
+// MimeBundle method returns it); gopyter picks the richest form it can
+// draw. A later Bundle or Display with the same non-empty id replaces it.
+// Outside gopyter, the text/plain entry is printed.
+func Bundle(bundle map[string]string, id string) {
+	m := map[string]any{"bundle": bundle}
+	if id != "" {
+		m["id"] = id
+	}
+	if !send(m) {
+		fmt.Println(bundle["text/plain"])
+	}
+}
+
 // Op sends an operation to the UI, like a DOM change or a widget value.
 // It reports whether it was sent.
 func Op(op map[string]any) bool { return send(op) }

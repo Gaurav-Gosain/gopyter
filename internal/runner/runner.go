@@ -15,6 +15,7 @@ import (
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel"
 	"github.com/Gaurav-Gosain/gopyter/internal/markdown"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 	"github.com/Gaurav-Gosain/gopyter/internal/termimg"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/colorprofile"
@@ -88,6 +89,33 @@ var htmlStyles = htmlview.Styles{
 func renderHTML(s string, tty bool) string {
 	lines, _ := htmlview.Render(s, htmlview.Options{Width: 100, Styles: htmlStyles, MaxImageLines: 40, NoImages: !tty})
 	return strings.Join(lines, "\n")
+}
+
+// tableStyles draw golars tables in gopyter's default dark colors.
+var tableStyles = table.Styles{
+	Border: lipgloss.NewStyle().Foreground(lipgloss.Color("#3F3F46")),
+	Header: labelStyle,
+	Dtype:  codeStyle,
+	Text:   outStyle,
+	Number: resultStyle,
+	Bool:   lipgloss.NewStyle().Foreground(lipgloss.Color("#8B5CF6")),
+	Null:   codeStyle.Italic(true),
+	Muted:  codeStyle,
+}
+
+// TableWidth is how wide tables are drawn.
+var TableWidth = 120
+
+func renderTable(s string, tty bool) string {
+	out, err := table.Decode(s)
+	if err != nil {
+		return errStyle.Render("can't show table: " + err.Error())
+	}
+	st := tableStyles
+	if !tty {
+		st = table.Styles{}
+	}
+	return strings.Join(table.Render(out.Table, TableWidth, st), "\n")
 }
 
 // events feeds a program's widgets: nobody can use them here, so they
@@ -220,6 +248,8 @@ func Run(ctx context.Context, k *kernel.Kernel, nb *notebook.Notebook, w io.Writ
 				rich(notebook.ImageOut, e.Text, e.ID)
 			case kernel.HTML:
 				rich(notebook.HTMLOut, e.Text, e.ID)
+			case kernel.Table:
+				rich(notebook.TableOut, e.Text, e.ID)
 			case kernel.Error:
 				bl.other()
 				appendOut(notebook.Error, e.Text, "")

@@ -1,0 +1,621 @@
+diff --git a/dataframe/repr.go b/dataframe/repr.go
+new file mode 100644
+index 0000000..1f3d29b
+--- /dev/null
++++ b/dataframe/repr.go
+@@ -0,0 +1,100 @@
++package dataframe
++
++import (
++	"github.com/Gaurav-Gosain/golars/internal/reprtable"
++	"github.com/Gaurav-Gosain/golars/series"
++)
++
++// TableMIME is the media type of the JSON table in MimeBundle: column
++// names, dtypes, formatted cells (null as JSON null), the shape and where
++// rows or columns were left out. Terminal notebooks such as gopyter draw
++// their own table from it.
++const TableMIME = reprtable.MIME
++
++// tableMaxCols caps the columns of the JSON table. It is wider than the
++// HTML default because terminal front ends fit columns to their width.
++const tableMaxCols = 64
++
++// MimeBundle returns the frame as Jupyter-style mime data: text/plain
++// (the String repr), text/html and TableMIME. Notebook front ends that
++// duck type on this method (gopyter's nb.Display, for one) show the
++// richest form they support.
++func (df *DataFrame) MimeBundle() map[string]string {
++	return df.MimeBundleWith(DefaultFormatOptions())
++}
++
++// MimeBundleWith is MimeBundle with custom bounds. MaxCols applies to
++// text/plain and text/html; the JSON table keeps up to 64 columns.
++func (df *DataFrame) MimeBundleWith(opts FormatOptions) map[string]string {
++	opts = normalizeFormat(opts)
++	wide := opts
++	if wide.MaxCols != -1 {
++		wide.MaxCols = max(wide.MaxCols, tableMaxCols)
++	}
++	t := df.reprTable(wide)
++	return map[string]string{
++		"text/plain": df.Format(opts),
++		"text/html":  df.HTMLWith(opts),
++		TableMIME:    t.JSON(),
++	}
++}
++
++// HTML renders the frame as a self-contained HTML table (inline styles,
++// shape caption, dtype row), using DefaultFormatOptions.
++func (df *DataFrame) HTML() string { return df.HTMLWith(DefaultFormatOptions()) }
++
++// HTMLWith is HTML with custom bounds.
++func (df *DataFrame) HTMLWith(opts FormatOptions) string {
++	t := df.reprTable(normalizeFormat(opts))
++	return t.HTML()
++}
++
++func normalizeFormat(opts FormatOptions) FormatOptions {
++	if opts.MaxRows <= 0 && opts.MaxRows != -1 {
++		opts.MaxRows = defaultMaxRows
++	}
++	if opts.MaxCols <= 0 && opts.MaxCols != -1 {
++		opts.MaxCols = defaultMaxCols
++	}
++	if opts.MaxCellRune <= 0 && opts.MaxCellRune != -1 {
++		opts.MaxCellRune = defaultMaxCellRune
++	}
++	return opts
++}
++
++func (df *DataFrame) reprTable(opts FormatOptions) reprtable.Table {
++	h, w := df.Shape()
++	t := reprtable.Table{Shape: [2]int{h, w}, Columns: []string{}, Dtypes: []string{}, Rows: [][]*string{}}
++	colIdx, colGap := reprtable.Pick(w, opts.MaxCols)
++	rowIdx, rowGap := reprtable.Pick(h, opts.MaxRows)
++	t.SetGaps(rowGap, colGap)
++	for _, ci := range colIdx {
++		s := df.ColumnAt(ci)
++		t.Columns = append(t.Columns, s.Name())
++		t.Dtypes = append(t.Dtypes, s.DType().String())
++	}
++	for _, ri := range rowIdx {
++		row := make([]*string, len(colIdx))
++		for j, ci := range colIdx {
++			row[j] = seriesCell(df.ColumnAt(ci), ri, opts.MaxCellRune)
++		}
++		t.Rows = append(t.Rows, row)
++	}
++	return t
++}
++
++// seriesCell formats row i of s, walking its chunks; nil means null.
++func seriesCell(s *series.Series, i, maxRune int) *string {
++	for c := range s.NumChunks() {
++		arr := s.Chunk(c)
++		if i < arr.Len() {
++			if arr.IsNull(i) {
++				return nil
++			}
++			v := renderCell(arr, i, maxRune)
++			return &v
++		}
++		i -= arr.Len()
++	}
++	return nil
++}
+diff --git a/dataframe/repr_test.go b/dataframe/repr_test.go
+new file mode 100644
+index 0000000..c6c63cd
+--- /dev/null
++++ b/dataframe/repr_test.go
+@@ -0,0 +1,115 @@
++package dataframe_test
++
++import (
++	"encoding/json"
++	"fmt"
++	"strings"
++	"testing"
++
++	"github.com/Gaurav-Gosain/golars/dataframe"
++	"github.com/Gaurav-Gosain/golars/series"
++)
++
++type reprTable struct {
++	Kind    string      `json:"kind"`
++	Columns []string    `json:"columns"`
++	Dtypes  []string    `json:"dtypes"`
++	Rows    [][]*string `json:"rows"`
++	Shape   [2]int      `json:"shape"`
++	RowGap  *int        `json:"row_gap"`
++	ColGap  *int        `json:"col_gap"`
++}
++
++func decodeTable(t *testing.T, bundle map[string]string) reprTable {
++	t.Helper()
++	var tbl reprTable
++	if err := json.Unmarshal([]byte(bundle[dataframe.TableMIME]), &tbl); err != nil {
++		t.Fatalf("table json: %v\n%s", err, bundle[dataframe.TableMIME])
++	}
++	return tbl
++}
++
++func TestMimeBundleTable(t *testing.T) {
++	a, err := series.FromInt64("a", []int64{1, 2, 3}, []bool{true, false, true})
++	if err != nil {
++		t.Fatal(err)
++	}
++	b, err := series.FromString("b", []string{"x", "y", "z"}, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	df, err := dataframe.New(a, b)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer df.Release()
++
++	bundle := df.MimeBundle()
++	for _, k := range []string{"text/plain", "text/html", dataframe.TableMIME} {
++		if bundle[k] == "" {
++			t.Fatalf("bundle lacks %s", k)
++		}
++	}
++	if !strings.Contains(bundle["text/html"], "<table") || !strings.Contains(bundle["text/plain"], "shape: (3, 2)") {
++		t.Fatalf("bundle %v", bundle)
++	}
++	tbl := decodeTable(t, bundle)
++	if tbl.Shape != [2]int{3, 2} || strings.Join(tbl.Columns, ",") != "a,b" || tbl.Dtypes[0] != "i64" {
++		t.Fatalf("table %+v", tbl)
++	}
++	if tbl.RowGap != nil || tbl.ColGap != nil || len(tbl.Rows) != 3 {
++		t.Fatalf("unexpected gaps %+v", tbl)
++	}
++	if tbl.Rows[1][0] != nil || *tbl.Rows[0][0] != "1" || *tbl.Rows[2][1] != "z" {
++		t.Fatalf("rows %+v", tbl.Rows)
++	}
++}
++
++func TestMimeBundleGaps(t *testing.T) {
++	vals := make([]int64, 25)
++	for i := range vals {
++		vals[i] = int64(i)
++	}
++	var cols []*series.Series
++	for c := range 70 {
++		s, err := series.FromInt64(fmt.Sprintf("c%d", c), vals, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cols = append(cols, s)
++	}
++	df, err := dataframe.New(cols...)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer df.Release()
++	tbl := decodeTable(t, df.MimeBundle())
++	if tbl.Shape != [2]int{25, 70} || len(tbl.Rows) != 10 || len(tbl.Columns) != 64 {
++		t.Fatalf("shape %v rows %d cols %d", tbl.Shape, len(tbl.Rows), len(tbl.Columns))
++	}
++	if tbl.RowGap == nil || *tbl.RowGap != 5 || tbl.ColGap == nil || *tbl.ColGap != 32 {
++		t.Fatalf("gaps %v %v", tbl.RowGap, tbl.ColGap)
++	}
++	if *tbl.Rows[5][0] != "20" || tbl.Columns[32] != "c38" {
++		t.Fatalf("tail row %v col %v", *tbl.Rows[5][0], tbl.Columns[32])
++	}
++	if html := df.HTML(); !strings.Contains(html, "showing 8 of 70 columns") {
++		t.Fatalf("html column note missing")
++	}
++}
++
++func TestSeriesMimeBundle(t *testing.T) {
++	s, err := series.FromFloat64("x", []float64{1.5, 2}, []bool{true, false})
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer s.Release()
++	bundle := s.MimeBundle()
++	tbl := decodeTable(t, bundle)
++	if tbl.Kind != "series" || tbl.Shape != [2]int{2, 1} || *tbl.Rows[0][0] != "1.5" || tbl.Rows[1][0] != nil {
++		t.Fatalf("table %+v", tbl)
++	}
++	if !strings.Contains(bundle["text/html"], "shape: (2,)") {
++		t.Fatalf("html %s", bundle["text/html"])
++	}
++}
+diff --git a/internal/reprtable/reprtable.go b/internal/reprtable/reprtable.go
+new file mode 100644
+index 0000000..7c99ab9
+--- /dev/null
++++ b/internal/reprtable/reprtable.go
+@@ -0,0 +1,177 @@
++// Package reprtable is the display-ready form of a DataFrame or Series
++// that notebook front ends consume: column names, dtypes and cell strings
++// already formatted, plus the shape and where rows or columns were
++// elided. It renders the HTML used by jupyter/render and the kernel, and
++// encodes as JSON under MIME so terminal front ends (for example
++// gopyter) can draw their own themed table from the same data.
++//
++// The package depends only on the standard library so both dataframe and
++// series can build tables without an import cycle.
++package reprtable
++
++import (
++	"encoding/json"
++	"fmt"
++	"html"
++	"strings"
++)
++
++// MIME is the media type of a Table encoded as JSON in a mime bundle.
++const MIME = "application/vnd.golars.table+json"
++
++// Table is a formatted window of a frame.
++type Table struct {
++	// Kind is "series" for a Series, empty for a DataFrame.
++	Kind    string   `json:"kind,omitempty"`
++	Columns []string `json:"columns"`
++	Dtypes  []string `json:"dtypes"`
++	// Rows holds the shown rows; a nil cell is a null.
++	Rows [][]*string `json:"rows"`
++	// Shape is the (height, width) of the whole frame.
++	Shape [2]int `json:"shape"`
++	// RowGap, when set, is the index in Rows where rows were left out:
++	// Rows[:RowGap] are the first rows and Rows[RowGap:] the last ones.
++	RowGap *int `json:"row_gap,omitempty"`
++	// ColGap is the same for columns.
++	ColGap *int `json:"col_gap,omitempty"`
++}
++
++// Pick chooses which of n items to show when at most limit fit: the first
++// half and the last half. gap is the index in idx where items were left
++// out, or -1 when all are shown. A negative limit shows everything.
++func Pick(n, limit int) (idx []int, gap int) {
++	if limit < 0 || n <= limit {
++		idx = make([]int, n)
++		for i := range idx {
++			idx[i] = i
++		}
++		return idx, -1
++	}
++	head := limit / 2
++	idx = make([]int, 0, limit)
++	for i := range head {
++		idx = append(idx, i)
++	}
++	for i := n - (limit - head); i < n; i++ {
++		idx = append(idx, i)
++	}
++	return idx, head
++}
++
++// SetGaps records the row and column gaps returned by Pick.
++func (t *Table) SetGaps(rowGap, colGap int) {
++	if rowGap >= 0 {
++		t.RowGap = &rowGap
++	}
++	if colGap >= 0 {
++		t.ColGap = &colGap
++	}
++}
++
++// JSON encodes the table for a mime bundle.
++func (t *Table) JSON() string {
++	b, err := json.Marshal(t)
++	if err != nil {
++		return "{}"
++	}
++	return string(b)
++}
++
++// cellBorder is the rgba border every <th>/<td> uses. currentColor would
++// track the text colour but breaks on themes that paint dark text on dark
++// backgrounds; a fixed translucent grey reads on light and dark pages.
++const cellBorder = "border:1px solid rgba(128,128,128,0.35)"
++
++// HTML renders the table as a self-contained fragment with inline styles,
++// in the polars-py look: a shape caption, a dtype subheader and "…" where
++// rows or columns were left out.
++func (t *Table) HTML() string {
++	h, w := t.Shape[0], t.Shape[1]
++	shape := fmt.Sprintf("(%d, %d)", h, w)
++	if t.Kind == "series" {
++		shape = fmt.Sprintf("(%d,)", h)
++	}
++	if len(t.Columns) == 0 || h == 0 && t.Kind != "series" {
++		return fmt.Sprintf(`<div class="golars-df"><small style="opacity:0.6">shape: %s - empty</small></div>`, shape)
++	}
++	colGap, rowGap := -1, -1
++	if t.ColGap != nil {
++		colGap = *t.ColGap
++	}
++	if t.RowGap != nil {
++		rowGap = *t.RowGap
++	}
++
++	var b strings.Builder
++	b.WriteString(`<div class="golars-df" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:inherit">`)
++	fmt.Fprintf(&b, `<small style="opacity:0.6">shape: %s</small>`, shape)
++	b.WriteString(`<table style="border-collapse:collapse;margin-top:4px;border:1px solid;border-color:currentColor;border-color:rgba(128,128,128,0.4)">`)
++	b.WriteString(`<thead><tr>`)
++	eachCol := func(cells []string, cell func(string) string) {
++		for i, s := range cells {
++			if i == colGap {
++				b.WriteString(cell("…"))
++			}
++			b.WriteString(cell(s))
++		}
++	}
++	eachCol(t.Columns, thHTML)
++	b.WriteString(`</tr><tr>`)
++	eachCol(t.Dtypes, dtypeHTML)
++	b.WriteString(`</tr></thead><tbody>`)
++	shown := len(t.Columns)
++	if colGap >= 0 {
++		shown++
++	}
++	gapRow := func() {
++		b.WriteString(`<tr>`)
++		for range shown {
++			b.WriteString(tdHTML("…", false))
++		}
++		b.WriteString(`</tr>`)
++	}
++	for ri, row := range t.Rows {
++		if ri == rowGap {
++			gapRow()
++		}
++		b.WriteString(`<tr>`)
++		for ci, cell := range row {
++			if ci == colGap {
++				b.WriteString(tdHTML("…", false))
++			}
++			if cell == nil {
++				b.WriteString(tdHTML("null", true))
++			} else {
++				b.WriteString(tdHTML(*cell, false))
++			}
++		}
++		b.WriteString(`</tr>`)
++	}
++	if rowGap == len(t.Rows) {
++		gapRow()
++	}
++	b.WriteString(`</tbody></table>`)
++	if colGap >= 0 {
++		fmt.Fprintf(&b, `<small style="opacity:0.6">(showing %d of %d columns)</small>`, len(t.Columns), w)
++	}
++	b.WriteString(`</div>`)
++	return b.String()
++}
++
++func thHTML(s string) string {
++	return fmt.Sprintf(`<th style="%s;padding:2px 6px;text-align:left;font-weight:600">%s</th>`,
++		cellBorder, html.EscapeString(s))
++}
++
++func dtypeHTML(s string) string {
++	return fmt.Sprintf(`<th style="%s;padding:2px 6px;opacity:0.6;text-align:left;font-weight:400;font-size:11px">%s</th>`,
++		cellBorder, html.EscapeString(s))
++}
++
++func tdHTML(s string, isNull bool) string {
++	style := cellBorder + ";padding:2px 6px"
++	if isNull {
++		style += ";opacity:0.45;font-style:italic"
++	}
++	return fmt.Sprintf(`<td style="%s">%s</td>`, style, html.EscapeString(s))
++}
+diff --git a/internal/reprtable/reprtable_test.go b/internal/reprtable/reprtable_test.go
+new file mode 100644
+index 0000000..a93567e
+--- /dev/null
++++ b/internal/reprtable/reprtable_test.go
+@@ -0,0 +1,40 @@
++package reprtable
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestPick(t *testing.T) {
++	idx, gap := Pick(3, 10)
++	if len(idx) != 3 || gap != -1 {
++		t.Fatalf("%v %d", idx, gap)
++	}
++	idx, gap = Pick(20, 5)
++	if gap != 2 || len(idx) != 5 || idx[0] != 0 || idx[2] != 17 || idx[4] != 19 {
++		t.Fatalf("%v %d", idx, gap)
++	}
++	if idx, gap = Pick(4, -1); len(idx) != 4 || gap != -1 {
++		t.Fatalf("%v %d", idx, gap)
++	}
++}
++
++func TestHTML(t *testing.T) {
++	v := "<b>"
++	tbl := Table{Columns: []string{"a", "b"}, Dtypes: []string{"str", "i64"}, Shape: [2]int{9, 3},
++		Rows: [][]*string{{&v, nil}, {&v, nil}}}
++	tbl.SetGaps(1, 1)
++	out := tbl.HTML()
++	for _, want := range []string{"shape: (9, 3)", "&lt;b&gt;", "null", "font-style:italic", "…", "showing 2 of 3 columns"} {
++		if !strings.Contains(out, want) {
++			t.Errorf("missing %q in %s", want, out)
++		}
++	}
++	if strings.Count(out, "<tr>") != 5 { // header, dtypes, row, gap, row
++		t.Errorf("rows: %s", out)
++	}
++	empty := Table{Columns: []string{"a"}, Dtypes: []string{"i64"}, Shape: [2]int{0, 1}}
++	if !strings.Contains(empty.HTML(), "empty") {
++		t.Error("empty frame")
++	}
++}
+diff --git a/jupyter/render/render.go b/jupyter/render/render.go
+index bc1bdb9..38e1267 100644
+--- a/jupyter/render/render.go
++++ b/jupyter/render/render.go
+@@ -19,7 +19,6 @@ package render
+ 
+ import (
+ 	"fmt"
+-	"html"
+ 	"strings"
+ 
+ 	"github.com/Gaurav-Gosain/golars/dataframe"
+@@ -56,55 +55,7 @@ func HTMLWith(df *dataframe.DataFrame, lim Limits) string {
+ 	if df == nil {
+ 		return `<pre>&lt;nil dataframe&gt;</pre>`
+ 	}
+-	h, w := df.Shape()
+-	if w == 0 || h == 0 {
+-		return fmt.Sprintf(`<div class="golars-df"><small style="opacity:0.6">shape: (%d, %d) - empty</small></div>`, h, w)
+-	}
+-	colIdx, colEllipsis := pickCols(w, lim.MaxCols)
+-	rowIdx, rowEllipsisAt := pickRows(h, lim.MaxRows)
+-
+-	var b strings.Builder
+-	b.WriteString(`<div class="golars-df" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:inherit">`)
+-	fmt.Fprintf(&b, `<small style="opacity:0.6">shape: (%d, %d)</small>`, h, w)
+-	b.WriteString(`<table style="border-collapse:collapse;margin-top:4px;border:1px solid;border-color:currentColor;border-color:rgba(128,128,128,0.4)">`)
+-
+-	b.WriteString(`<thead><tr>`)
+-	for _, ci := range colIdx {
+-		if ci < 0 {
+-			b.WriteString(thHTML("…"))
+-			continue
+-		}
+-		b.WriteString(thHTML(df.ColumnAt(ci).Name()))
+-	}
+-	b.WriteString(`</tr><tr>`)
+-	for _, ci := range colIdx {
+-		if ci < 0 {
+-			b.WriteString(dtypeHTML("…"))
+-			continue
+-		}
+-		b.WriteString(dtypeHTML(df.ColumnAt(ci).DType().String()))
+-	}
+-	b.WriteString(`</tr></thead><tbody>`)
+-
+-	for ri, rowPos := range rowIdx {
+-		b.WriteString(`<tr>`)
+-		for _, ci := range colIdx {
+-			if ci < 0 || ri == rowEllipsisAt {
+-				b.WriteString(tdHTML("…", false))
+-				continue
+-			}
+-			cell, isNull := cellString(df.ColumnAt(ci), rowPos, lim.MaxCellRune)
+-			b.WriteString(tdHTML(cell, isNull))
+-		}
+-		b.WriteString(`</tr>`)
+-	}
+-
+-	b.WriteString(`</tbody></table>`)
+-	if colEllipsis {
+-		fmt.Fprintf(&b, `<small style="opacity:0.6">(showing %d of %d columns)</small>`, len(colIdx), w)
+-	}
+-	b.WriteString(`</div>`)
+-	return b.String()
++	return df.HTMLWith(dataframe.FormatOptions{MaxRows: lim.MaxRows, MaxCols: lim.MaxCols, MaxCellRune: lim.MaxCellRune})
+ }
+ 
+ // Markdown renders df as a GFM pipe-table. Useful when the consumer
+@@ -177,34 +128,6 @@ func MimeBundle(df *dataframe.DataFrame) map[string]string {
+ 
+ // --- helpers ----------------------------------------------------
+ 
+-// cellBorder is the rgba border every <th>/<td> uses. currentColor
+-// would track text colour but breaks on themes that paint dark text on
+-// dark backgrounds (charm-ish notebooks); a fixed translucent grey
+-// reads cleanly on white, light grey, or near-black backgrounds.
+-const cellBorder = "border:1px solid rgba(128,128,128,0.35)"
+-
+-func thHTML(s string) string {
+-	return fmt.Sprintf(
+-		`<th style="%s;padding:2px 6px;text-align:left;font-weight:600">%s</th>`,
+-		cellBorder, html.EscapeString(s),
+-	)
+-}
+-
+-func dtypeHTML(s string) string {
+-	return fmt.Sprintf(
+-		`<th style="%s;padding:2px 6px;opacity:0.6;text-align:left;font-weight:400;font-size:11px">%s</th>`,
+-		cellBorder, html.EscapeString(s),
+-	)
+-}
+-
+-func tdHTML(s string, isNull bool) string {
+-	style := cellBorder + ";padding:2px 6px"
+-	if isNull {
+-		style += ";opacity:0.45;font-style:italic"
+-	}
+-	return fmt.Sprintf(`<td style="%s">%s</td>`, style, html.EscapeString(s))
+-}
+-
+ // mdEscape escapes pipes + newlines so a cell value can't break the
+ // GFM table grid.
+ func mdEscape(s string) string {
+diff --git a/series/repr.go b/series/repr.go
+new file mode 100644
+index 0000000..b8c8b46
+--- /dev/null
++++ b/series/repr.go
+@@ -0,0 +1,55 @@
++package series
++
++import "github.com/Gaurav-Gosain/golars/internal/reprtable"
++
++// MimeBundle returns the series as Jupyter-style mime data: text/plain
++// (the String repr), text/html and the JSON table
++// "application/vnd.golars.table+json" (see dataframe.TableMIME), for
++// notebook front ends that duck type on this method.
++func (s *Series) MimeBundle() map[string]string {
++	opts := DefaultSeriesFormatOptions()
++	t := s.reprTable(opts)
++	return map[string]string{
++		"text/plain":   s.Format(opts),
++		"text/html":    t.HTML(),
++		reprtable.MIME: t.JSON(),
++	}
++}
++
++// HTML renders the series as a one-column HTML table.
++func (s *Series) HTML() string {
++	t := s.reprTable(DefaultSeriesFormatOptions())
++	return t.HTML()
++}
++
++func (s *Series) reprTable(opts SeriesFormatOptions) reprtable.Table {
++	h := s.Len()
++	name := s.Name()
++	t := reprtable.Table{
++		Kind: "series", Shape: [2]int{h, 1},
++		Columns: []string{name}, Dtypes: []string{s.DType().String()},
++		Rows: [][]*string{},
++	}
++	rowIdx, rowGap := reprtable.Pick(h, opts.MaxRows)
++	t.SetGaps(rowGap, -1)
++	for _, ri := range rowIdx {
++		t.Rows = append(t.Rows, []*string{s.cellAt(ri, opts.MaxCellRune)})
++	}
++	return t
++}
++
++// cellAt formats row i, walking the chunks; nil means null.
++func (s *Series) cellAt(i, maxRune int) *string {
++	for c := range s.NumChunks() {
++		arr := s.Chunk(c)
++		if i < arr.Len() {
++			if arr.IsNull(i) {
++				return nil
++			}
++			v := renderSeriesCell(arr, i, maxRune)
++			return &v
++		}
++		i -= arr.Len()
++	}
++	return nil
++}

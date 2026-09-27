@@ -95,6 +95,8 @@ func renderOutput(o notebook.Output, tty bool) string {
 		return renderImage(o.Text, tty)
 	case notebook.HTMLOut:
 		return renderHTML(o.Text, tty)
+	case notebook.TableOut:
+		return renderTable(o.Text, tty)
 	}
 	return o.Text
 }

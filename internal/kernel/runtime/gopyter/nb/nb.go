@@ -24,8 +24,41 @@ import (
 	"github.com/Gaurav-Gosain/gopyter/internal/kernel/runtime/gopyter/nb/wire"
 )
 
+// MimeBundler is implemented by values that describe themselves as mime
+// data, like golars DataFrames and Series: Display shows the richest form
+// gopyter can draw (a golars table, HTML, markdown, an image) and saves
+// the others in the notebook.
+type MimeBundler interface {
+	MimeBundle() map[string]string
+}
+
+// HTMLer is implemented by values with an HTML form. Display shows it as
+// HTML and saves it as text/html.
+type HTMLer interface {
+	HTML() string
+}
+
+// rich returns the mime bundle of a value that has one.
+func rich(v any) (map[string]string, bool) {
+	if v == nil || isNil(v) {
+		return nil, false
+	}
+	switch r := v.(type) {
+	case MimeBundler:
+		if b := r.MimeBundle(); len(b) > 0 {
+			return b, true
+		}
+	case HTMLer:
+		plain := fmt.Sprintf("%+v", v)
+		return map[string]string{"text/html": r.HTML(), "text/plain": plain}, true
+	}
+	return nil, false
+}
+
 // Display shows the given values as the cell's output. Images
-// (image.Image) are drawn; other values are shown as text.
+// (image.Image) are drawn, values with a MimeBundle or HTML method (like
+// golars DataFrames) are shown in their richest form, and other values
+// are shown as text.
 func Display(vs ...any) {
 	var parts []string
 	emitted := false
@@ -40,6 +73,12 @@ func Display(vs ...any) {
 		if img, ok := v.(image.Image); ok && !isNil(v) {
 			flush()
 			displayImage(img, "")
+			emitted = true
+			continue
+		}
+		if b, ok := rich(v); ok {
+			flush()
+			wire.Bundle(b, "")
 			emitted = true
 			continue
 		}
@@ -59,6 +98,10 @@ func DisplayID(id string, vs ...any) {
 	if len(vs) == 1 {
 		if img, ok := vs[0].(image.Image); ok && !isNil(vs[0]) {
 			displayImage(img, id)
+			return
+		}
+		if b, ok := rich(vs[0]); ok {
+			wire.Bundle(b, id)
 			return
 		}
 	}
@@ -96,6 +139,21 @@ func displayImage(img image.Image, id string) {
 		return
 	}
 	wire.Display("image/png", base64.StdEncoding.EncodeToString(buf.Bytes()), "[image/png]", id)
+}
+
+// BridgePath returns the Arrow IPC file through which glr and Go cells
+// share the frame called name. A glr cell's `%export name` writes it and
+// a Go cell reads it with golars.ReadIPC(nb.BridgePath(name)); a Go cell
+// writes one with golars.WriteIPC(df, nb.BridgePath(name)) for a glr
+// cell's `%import name`. Outside gopyter it is name.arrow in the current
+// directory.
+func BridgePath(name string) string {
+	file := url.PathEscape(name) + ".arrow"
+	dir := os.Getenv("GOPYTER_BRIDGE_DIR")
+	if dir == "" {
+		return file
+	}
+	return filepath.Join(dir, file)
 }
 
 // Cache returns the value stored under key, calling fn and storing its

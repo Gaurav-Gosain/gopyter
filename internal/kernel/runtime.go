@@ -103,5 +103,56 @@ func (k *Kernel) setupRuntime(ctx context.Context) error {
 	if out, err := k.goCmd(ctx, args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("go mod edit: %v: %s", err, out)
 	}
+	if dir := os.Getenv("GOLARS_DIR"); dir != "" {
+		return k.linkGolars(ctx, dir)
+	}
 	return nil
+}
+
+// GolarsPath is the module path of golars.
+const GolarsPath = "github.com/Gaurav-Gosain/golars"
+
+// linkGolars points the workspace at a local golars checkout (GOLARS_DIR),
+// so cells can import golars without fetching it: a replace directive,
+// plus golars' go.sum, whose checksums let its dependencies resolve from
+// the module cache without the network. The module is only required once
+// a cell imports it (see missingModules).
+func (k *Kernel) linkGolars(ctx context.Context, dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	mod, err := os.ReadFile(filepath.Join(abs, "go.mod"))
+	if err != nil {
+		return fmt.Errorf("GOLARS_DIR: %w", err)
+	}
+	if !strings.Contains(string(mod), "module "+GolarsPath+"\n") {
+		return fmt.Errorf("GOLARS_DIR: %s is not the %s module", abs, GolarsPath)
+	}
+	if out, err := k.goCmd(ctx, "mod", "edit", "-replace="+GolarsPath+"="+abs).CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod edit: %v: %s", err, out)
+	}
+	sums, err := os.ReadFile(filepath.Join(abs, "go.sum"))
+	if err != nil {
+		return nil // no dependencies to check
+	}
+	path := filepath.Join(k.Dir, "go.sum")
+	have, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	seen := map[string]bool{}
+	for l := range strings.SplitSeq(string(have), "\n") {
+		seen[l] = true
+	}
+	var b strings.Builder
+	b.Write(have)
+	for l := range strings.SplitSeq(string(sums), "\n") {
+		if l != "" && !seen[l] {
+			seen[l] = true
+			b.WriteString(l)
+			b.WriteByte('\n')
+		}
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o644)
 }

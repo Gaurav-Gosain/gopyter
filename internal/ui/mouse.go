@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
 	"github.com/Gaurav-Gosain/gopyter/internal/notebook"
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 )
 
 // actionKind identifies something a mouse click can trigger.
@@ -770,6 +771,10 @@ func plainOutput(c *Cell) string {
 			text = "[image]" // base64 would be useless as text
 		case notebook.HTMLOut:
 			text = htmlview.Text(text)
+		case notebook.TableOut:
+			if tb, err := table.Decode(text); err == nil {
+				text = table.Plain(tb.Table)
+			}
 		}
 		b.WriteString(text)
 		if !strings.HasSuffix(text, "\n") {

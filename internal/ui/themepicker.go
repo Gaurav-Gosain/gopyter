@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/gopyter/internal/htmlview"
+	"github.com/Gaurav-Gosain/gopyter/internal/table"
 )
 
 // themeState holds the active theme and the theme picker.
@@ -75,6 +76,17 @@ func (m *Model) applyTheme(name string) {
 		ButtonFocus: m.theme.dlgFocus.Padding(0),
 		ButtonOff:   lipgloss.NewStyle().Foreground(colMuted).Background(colFaint),
 		Accent:      lipgloss.NewStyle().Foreground(colPrimary),
+	}
+
+	m.tableStyles = table.Styles{
+		Border: lipgloss.NewStyle().Foreground(colSubtle),
+		Header: lipgloss.NewStyle().Foreground(colPrimary).Bold(true),
+		Dtype:  m.theme.muted,
+		Text:   m.theme.text,
+		Number: lipgloss.NewStyle().Foreground(colInfo),
+		Bool:   lipgloss.NewStyle().Foreground(colAccent),
+		Null:   m.theme.muted.Italic(true),
+		Muted:  m.theme.muted,
 	}
 
 	// Rendered markdown and outputs are cached with their styles baked in.
