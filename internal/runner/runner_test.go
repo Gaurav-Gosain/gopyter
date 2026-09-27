@@ -129,7 +129,8 @@ func TestRunGLR(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "t.csv"), []byte("a,b\n1,x\n2,\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	g := &glr.Kernel{Dir: dir, BridgeDir: k.BridgeDir()}
+	g := glr.NewKernel(k)
+	g.Dir = dir
 	t.Cleanup(func() { _ = g.Close() })
 	nb := notebook.NewLang(notebook.GLR)
 	nb.Cells = []*notebook.Cell{

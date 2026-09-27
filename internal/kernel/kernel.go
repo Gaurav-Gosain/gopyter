@@ -81,6 +81,8 @@ type Kernel struct {
 	Dir string
 	// RunDir is the working directory of executed programs.
 	RunDir string
+	// Frames are the golars frames shared with glr cells (frames.go).
+	Frames *Frames
 
 	mu      sync.Mutex
 	checkMu sync.Mutex // serializes Check, which reuses one directory
@@ -144,6 +146,10 @@ func gopyterWriteFile(path string, data []byte) error {
 // saved when main returns.
 
 var gopyterVarErrs = map[string]string{}
+
+// gopyterFramesSaved lists the golars frames saved for glr cells (see
+// gopyter_frames.go), as rows and columns; -1 means set to nil.
+var gopyterFramesSaved = map[string][2]int{}
 
 // gopyterError stands in for error values that gob can't encode.
 type gopyterError struct{ Msg string }
@@ -232,7 +238,7 @@ func gopyterVarsDone() {
 	if dir == "" {
 		return
 	}
-	b, _ := gopyter_json.Marshal(map[string]any{"errors": gopyterVarErrs})
+	b, _ := gopyter_json.Marshal(map[string]any{"errors": gopyterVarErrs, "frames": gopyterFramesSaved})
 	if err := gopyterWriteFile(gopyter_filepath.Join(dir, "status.json"), b); err != nil {
 		gopyter_fmt.Fprintf(gopyter_os.Stderr, "gopyter: variables not saved: %v\n", err)
 	}
@@ -266,7 +272,8 @@ func New(dir string) (*Kernel, error) {
 	if err := k.setupRuntime(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(k.BridgeDir(), 0o755); err != nil {
+	k.Frames = NewFrames(filepath.Join(k.BridgeDir(), "frames"))
+	if err := os.MkdirAll(k.Frames.Dir, 0o755); err != nil {
 		return nil, err
 	}
 	if out, err := k.goCmd(context.Background(), "env", "GOVERSION").Output(); err == nil {
@@ -293,6 +300,9 @@ func (k *Kernel) Reset() error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.decls, k.imports = nil, nil
+	if k.Frames != nil {
+		k.Frames.ResetGo()
+	}
 	return os.RemoveAll(k.VarsDir())
 }
 
@@ -423,6 +433,9 @@ func (k *Kernel) environ() []string {
 		"GOPYTER_BRIDGE_DIR="+k.BridgeDir(),
 		// As GoNB defines them.
 		"GONB_DIR="+k.RunDir, "GONB_TMP_DIR="+k.Dir)
+	if k.Frames != nil {
+		env = append(env, "GOPYTER_FRAMES_DIR="+k.Frames.Dir)
+	}
 	for key, v := range k.env {
 		env = append(env, key+"="+v)
 	}
@@ -474,6 +487,7 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 		}
 	}()
 
+	cellSrc := src
 	pc, err := parseCell(cellID, name, src)
 	if err != nil {
 		emit(Event{Kind: Error, Text: cleanErrors(err.Error(), k.Dir)})
@@ -511,6 +525,9 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 		return err
 	}
 
+	// Frames from glr cells that the cell mentions.
+	read := k.pullFrames(ctx, cellSrc, pc.imports, emit)
+
 	var decls []*Decl
 	var imps, resolved []*Import
 	write := func() error {
@@ -519,7 +536,7 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 		if err := os.WriteFile(mainPath, []byte(src), 0o644); err != nil {
 			return err
 		}
-		return writeVars(k.Dir, decls)
+		return writeVars(k.Dir, decls, framesUsed(cellSrc, decls))
 	}
 	// prepare decides which variables are hoisted, which needs the
 	// dependencies (it is repeated after fetching modules).
@@ -604,7 +621,9 @@ func (k *Kernel) ExecuteInput(ctx context.Context, cellID, name, src string, in 
 	if pc.userMain == "" && !pc.test {
 		// A cell's own func main doesn't save the variables, and
 		// neither does a test binary, which never calls main.
-		k.afterRun(cellID, emit)
+		k.frameStatus(k.afterRun(cellID, emit), read, emit)
+	} else {
+		k.frameStatus(nil, read, emit)
 	}
 	return err
 }

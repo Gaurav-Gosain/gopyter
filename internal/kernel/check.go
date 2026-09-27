@@ -74,7 +74,7 @@ func (k *Kernel) Check(ctx context.Context, cellID, name, src string) (CheckResu
 		if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(gen), 0o644); err != nil {
 			return err
 		}
-		return writeVars(dir, decls)
+		return writeVars(dir, decls, nil)
 	}
 	if err := write(); err != nil {
 		return CheckResult{}, err

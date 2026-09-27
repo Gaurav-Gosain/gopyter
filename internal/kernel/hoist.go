@@ -32,6 +32,10 @@ type VarInfo struct {
 	Type string
 	// Imports are those of its declaration (alias -> path).
 	Imports map[string]string
+	// Frame marks a golars *DataFrame. It is saved as Arrow IPC in the
+	// shared frames directory instead of with gob, so glr cells can read
+	// it (frames.go).
+	Frame bool
 }
 
 const varsFile = "gopyter_vars.go"
@@ -54,8 +58,9 @@ func (k *Kernel) removeVarFile(name string) error {
 func varFileName(name string) string { return hex.EncodeToString([]byte(name)) + ".gob" }
 
 // writeVars generates gopyter_vars.go in dir for the hoisted variables in
-// decls.
-func writeVars(dir string, decls []*Decl) error {
+// decls, and gopyter_frames.go when some are golars frames. used are the
+// frames the cell mentions: only those are read when the program starts.
+func writeVars(dir string, decls []*Decl, used map[string]bool) error {
 	var vars []*Decl
 	imps := map[string]string{}
 	for _, d := range decls {
@@ -79,7 +84,17 @@ func writeVars(dir string, decls []*Decl) error {
 	}
 	// Called by a deferred call in main().
 	b.WriteString("func gopyterSaveVars() {\n")
+	var frames []string
 	for _, d := range vars {
+		if d.Var.Frame {
+			frames = append(frames, d.Names[0])
+			b.WriteString("\tgopyterSaveFrame(")
+			b.WriteString(strconv.Quote(d.Names[0]))
+			b.WriteString(", ")
+			b.WriteString(d.Names[0])
+			b.WriteString(")\n")
+			continue
+		}
 		b.WriteString("\tgopyterSaveVar(")
 		b.WriteString(strconv.Quote(d.Names[0]))
 		b.WriteString(", ")
@@ -93,7 +108,10 @@ func writeVars(dir string, decls []*Decl) error {
 		b.WriteString(d.Src)
 		b.WriteString("\n\n")
 	}
-	return os.WriteFile(filepath.Join(dir, varsFile), []byte(b.String()), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, varsFile), []byte(b.String()), 0o644); err != nil {
+		return err
+	}
+	return writeFrames(dir, frames, used)
 }
 
 // hoist type-checks the cell with its variables kept local and decides
@@ -126,7 +144,7 @@ func (k *Kernel) hoist(ctx context.Context, dir string, env []string, cellID str
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
 		return nil, nil
 	}
-	if err := writeVars(dir, decls); err != nil {
+	if err := writeVars(dir, decls, nil); err != nil {
 		return nil, nil
 	}
 	cfg := &packages.Config{
@@ -306,16 +324,22 @@ func varDecl(cellID, cellName string, id defIdent, v *types.Var, main *types.Pac
 		}
 		return p.Name()
 	})
+	frame := isFrameType(v.Type())
 	var src strings.Builder
 	src.WriteString(lineDirective(cellName, id.line, id.col))
 	// Initialized by loading, so package-level vars using it come after.
-	fmt.Fprintf(&src, "var %s %s = gopyterLoadVar[%s](%s, %s)", id.name, typ, typ, strconv.Quote(id.name), strconv.Quote(key))
+	if frame {
+		key = FrameType
+		fmt.Fprintf(&src, "var %s %s = gopyterLoadFrame(%s)", id.name, typ, strconv.Quote(id.name))
+	} else {
+		fmt.Fprintf(&src, "var %s %s = gopyterLoadVar[%s](%s, %s)", id.name, typ, typ, strconv.Quote(id.name), strconv.Quote(key))
+	}
 	return &Decl{
 		Names:  []string{id.name},
 		Src:    src.String(),
 		Raw:    raw,
 		CellID: cellID,
-		Var:    &VarInfo{Type: key, Imports: imps},
+		Var:    &VarInfo{Type: key, Imports: imps, Frame: frame},
 	}
 }
 
@@ -422,12 +446,16 @@ func importable(path string) bool {
 // hoisted variables.
 type varsStatus struct {
 	Errors map[string]string `json:"errors"`
+	// Frames are the golars frames saved for glr cells: rows and
+	// columns, or -1 for a variable set to nil.
+	Frames map[string][2]int `json:"frames"`
 }
 
 // afterRun reconciles the hoisted variables with what the program saved.
 // A variable defined by this cell that could not be saved is forgotten,
-// so later cells fail to compile instead of seeing a zero value.
-func (k *Kernel) afterRun(cellID string, emit func(Event)) {
+// so later cells fail to compile instead of seeing a zero value. It
+// returns the frames the program saved.
+func (k *Kernel) afterRun(cellID string, emit func(Event)) map[string][2]int {
 	var st varsStatus
 	b, err := os.ReadFile(k.varsStatusPath())
 	saved := err == nil && json.Unmarshal(b, &st) == nil
@@ -446,7 +474,7 @@ func (k *Kernel) afterRun(cellID string, emit func(Event)) {
 		case !saved && d.CellID == cellID:
 			lost = append(lost, name)
 		case failed && d.CellID == cellID:
-			notes = append(notes, fmt.Sprintf("%s is not kept for later cells: %s", name, reason))
+			notes = append(notes, notKept(name, d.Var.Type, reason))
 		case failed:
 			reset = append(reset, name)
 			notes = append(notes, fmt.Sprintf("%s could not be saved, later cells see its zero value: %s", name, reason))
@@ -477,4 +505,20 @@ func (k *Kernel) afterRun(cellID string, emit func(Event)) {
 	for _, n := range notes {
 		emit(Event{Kind: Info, Text: n})
 	}
+	return st.Frames
+}
+
+// notKept says why a variable isn't kept for later cells, and what to do
+// instead.
+func notKept(name, typ, reason string) string {
+	switch {
+	case strings.Contains(typ, "LazyFrame") && strings.Contains(typ, "github.com/Gaurav-Gosain/golars"):
+		return fmt.Sprintf("%s is not kept for later cells: a golars LazyFrame is a query plan, which can't be saved. "+
+			"Keep %s.Collect(ctx) instead (a DataFrame is kept, and shared with glr cells), "+
+			"or declare it with var %s = ... at the top level of a cell, so every cell rebuilds the plan.", name, name, name)
+	case strings.Contains(reason, "has no exported fields") || strings.Contains(reason, "can't be saved"):
+		return fmt.Sprintf("%s is not kept for later cells: %s. Declare it with var %s = ... at the top level of a cell "+
+			"instead of :=, so every cell re-runs the initializer.", name, reason, name)
+	}
+	return fmt.Sprintf("%s is not kept for later cells: %s", name, reason)
 }

@@ -32,12 +32,16 @@ type Kernel struct {
 	// BridgeDir holds the Arrow IPC files shared with Go cells (see
 	// kernel.Kernel.BridgeDir). Empty disables %export and %import.
 	BridgeDir string
+	// Frames shares frames with Go cells (frames.go); nil disables it.
+	Frames *kernel.Frames
 
 	mu   sync.Mutex // serializes cells
 	host *host
 	// lost is set when a host with state was stopped, so the next cell
 	// can say that earlier frames are gone.
 	lost bool
+	// noFrames is set when the host can't share frames (an older golars).
+	noFrames bool
 }
 
 // ErrNoGolars is wrapped by errors about a missing golars binary.
@@ -68,6 +72,15 @@ func (k *Kernel) Execute(ctx context.Context, cellID, name, src string, emit fun
 			emit(kernel.Event{Kind: kernel.Info, Text: "golars restarted: frames from earlier cells are gone"})
 		}
 	}
+	read := k.pushFrames(ctx, code, emit)
+	if k.host == nil {
+		// It exited while staging frames.
+		if ctx.Err() != nil {
+			return kernel.ErrInterrupted
+		}
+		emit(kernel.Event{Kind: kernel.Error, Text: errHostExited.Error()})
+		return kernel.ErrFailed
+	}
 	reply, err := k.host.run(ctx, code)
 	if err != nil {
 		k.host = nil
@@ -79,6 +92,12 @@ func (k *Kernel) Execute(ctx context.Context, cellID, name, src string, emit fun
 		return kernel.ErrFailed
 	}
 	k.emitReply(reply, name, emit)
+	shared := k.syncFrames(ctx, emit)
+	if k.Frames != nil {
+		if line := k.Frames.Status("go", shared, read); line != "" {
+			emit(kernel.Event{Kind: kernel.Info, Text: line})
+		}
+	}
 	if reply.Error != "" {
 		return kernel.ErrFailed
 	}
@@ -107,6 +126,10 @@ func (k *Kernel) start() error {
 		return err
 	}
 	k.host = h
+	k.noFrames = false
+	if k.Frames != nil {
+		k.Frames.GLRKeep(nil) // a new host has no frames
+	}
 	return nil
 }
 

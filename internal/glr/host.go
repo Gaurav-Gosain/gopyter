@@ -23,6 +23,23 @@ type Request struct {
 	// Structured asks for tables as data: the reply then carries Outputs
 	// and Table. Hosts that predate it ignore the field.
 	Structured bool `json:"structured,omitempty"`
+	// Op, Name and Path make a request that runs no code: "frames" lists
+	// the frames, "export" writes frame Name ("" for the focus) to Path
+	// as Arrow IPC and "import" stages Path as frame Name. Hosts that
+	// predate them reply with an error.
+	Op   string `json:"op,omitempty"`
+	Name string `json:"name,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+// HostFrame is a frame listed by an op=frames reply.
+type HostFrame struct {
+	Name  string `json:"name"`
+	Focus bool   `json:"focus,omitempty"`
+	Rows  int    `json:"rows"`
+	Cols  int    `json:"cols"`
+	Lazy  bool   `json:"lazy,omitempty"`
+	Gen   int    `json:"gen"`
 }
 
 // Reply is the host's answer to a Request.
@@ -40,6 +57,10 @@ type Reply struct {
 	// Outputs are stdout text and tables in the order the cell printed
 	// them.
 	Outputs []Output `json:"outputs,omitempty"`
+	// Frames answers op=frames; Gen is the generation of the frame an
+	// op=import staged.
+	Frames []HostFrame `json:"frames,omitempty"`
+	Gen    int         `json:"gen,omitempty"`
 }
 
 // Output is an entry of Reply.Outputs.
@@ -92,8 +113,13 @@ func startHost(bin, dir string, env []string) (*host, error) {
 // run sends code and waits for the reply. Cancelling ctx kills the host,
 // which can't stop a cell otherwise; run then returns ctx.Err().
 func (h *host) run(ctx context.Context, code string) (*Reply, error) {
+	return h.do(ctx, Request{Code: code, Structured: true})
+}
+
+// do sends a request and waits for the reply, like run.
+func (h *host) do(ctx context.Context, req Request) (*Reply, error) {
 	h.seq++
-	req := Request{ID: strconv.Itoa(h.seq), Code: code, Structured: true}
+	req.ID = strconv.Itoa(h.seq)
 	line, err := json.Marshal(req)
 	if err != nil {
 		return nil, err

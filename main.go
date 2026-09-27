@@ -103,7 +103,7 @@ func newSession(workdir string) (*session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &session{k: k, glr: &glr.Kernel{BridgeDir: k.BridgeDir()}}
+	s := &session{k: k, glr: glr.NewKernel(k)}
 	s.comp = glr.NewCompleter(func() string { return s.glr.Dir })
 	return s, nil
 }

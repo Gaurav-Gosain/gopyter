@@ -91,7 +91,8 @@ func TestExamples(t *testing.T) {
 			k.RunDir = t.TempDir()
 			copyData(t, filepath.Dir(path), k.RunDir)
 			if wantGolars {
-				g = &glr.Kernel{Dir: k.RunDir, BridgeDir: k.BridgeDir()}
+				g = glr.NewKernel(k)
+				g.Dir = k.RunDir
 				t.Cleanup(func() { _ = g.Close() })
 			}
 			var out bytes.Buffer
