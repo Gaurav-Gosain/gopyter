@@ -23,7 +23,7 @@ so GoNB notebooks run in gopyter too. See [Acknowledgements](#acknowledgements).
 - **Headless runs** for scripts and CI: `gopyter run notes.ipynb --save`
 - **Live reload.** Edits made to the notebook file by other programs show up automatically
 - **Optional AI.** Off until you pick a model; then `e` asks it to write or change a cell as you describe, and `f` to fix a failing one. Every proposal is checked to compile, and you see the diff before anything changes
-- **golars DataFrames.** glr cells run [golars](https://github.com/Gaurav-Gosain/golars) scripts next to Go cells, and golars DataFrames show as tables drawn in your theme (see [golars](#golars))
+- **golars DataFrames.** glr cells run [golars](https://github.com/Gaurav-Gosain/golars) scripts next to Go cells, the two share frames by name, and golars DataFrames show as tables drawn in your theme (see [golars](#golars))
 
 ## golars
 
@@ -66,12 +66,37 @@ also reads well in JupyterLab.
   and expression functions (`dt.year`, `x.round`) still complete.
 - **golars in Go cells.** `import "github.com/Gaurav-Gosain/golars"`: a
   trailing DataFrame or Series (or `nb.Display(df)`) is drawn as a table and
-  saved as `text/html`. Set `GOLARS_DIR=/path/to/golars` to build against a
-  local checkout, offline.
-- **Between the two.** In a glr cell, `%export NAME` saves the focused frame
-  and `%import NAME` loads one as the named frame `NAME`. Go cells read and
-  write the same Arrow IPC files with `golars.ReadIPC(nb.BridgePath("NAME"))`
-  and `golars.WriteIPC(df, nb.BridgePath("NAME"))`.
+  saved as `text/html`. `df := golars.ReadCSV("x.csv")` in one cell and
+  `df.Head(5)` in the next just works: a DataFrame declared with `:=` is kept
+  as Arrow IPC, and other golars values (a Series, frames inside structs or
+  maps) with gob. A LazyFrame is a plan and isn't kept: the cell says to
+  keep `lf.Collect(ctx)` or to declare it with a top-level `var`. Set
+  `GOLARS_DIR=/path/to/golars` to build against a local checkout, offline;
+  if golars can't be fetched, the error says so.
+- **Shared frames.** golars frames are shared by name, with no commands:
+  - a Go variable holding a `*DataFrame`, declared with `:=` at the top level
+    of a cell, is a glr frame of the same name: `use df`, `join df on id`;
+  - a named glr frame (`load PATH as NAME`, `stash NAME`) is a Go variable
+    `NAME` of type `*dataframe.DataFrame`, and the frame the last glr cell
+    ended on is `glr`.
+
+  A frame is copied only when a cell of the other language mentions it and
+  it changed since that side last read it, so an unchanged frame is never
+  written twice and a frame nobody uses is never read. Names form one
+  namespace, like variables: the last cell that changes a frame wins, and
+  since a cell first reads the latest version of every frame it mentions,
+  it always builds on what the other language did. Every cell ends with a
+  line such as `frames read from glr: sales (8 x 3); shared with glr: top
+  (5 x 2)`. A name that can't be shared says why, once: a glr frame whose
+  name a Go cell declares as something else (`customers := 5`), a Go import
+  or a Go keyword stays glr-only; rename one side (`stash NEWNAME`).
+  Completion knows the other side's frames: golars-lsp completes Go frames
+  and their columns in glr cells, and gopls completes glr frames in Go
+  cells. `%export` / `%import` still write and read explicit files: in a
+  glr cell, `%export NAME` saves the focused frame and `%import NAME` loads
+  one as the named frame `NAME`; Go cells use the same Arrow IPC files with
+  `golars.ReadIPC(nb.BridgePath("NAME"))` and
+  `golars.WriteIPC(df, nb.BridgePath("NAME"))`.
 - **Scripts.** `gopyter script.glr` offers to import a script as a notebook
   (one cell per blank-line separated block, leading comments as markdown);
   `gopyter run script.glr` runs it headless.
@@ -88,9 +113,12 @@ golars versions whose kernel-host supports structured replies; with older
 ones gopyter shows golars' HTML and text instead. The golars changes this
 needs are in [`golars-patches`](golars-patches).
 
-Try `gopyter examples/golars.ipynb` (a glr notebook) and
+Try `gopyter examples/golars.ipynb` (a glr notebook),
+`GOLARS_DIR=~/src/golars gopyter examples/golars-mixed.ipynb` (load in glr,
+transform in Go, summarize in glr, with shared frames) and
 `GOLARS_DIR=~/src/golars gopyter examples/golars-go.ipynb` (Go and golars,
-and frames passed both ways).
+with explicit bridge files). A new notebook explains under its first cell
+how to switch languages and share frames.
 
 ## Install
 

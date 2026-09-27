@@ -192,6 +192,13 @@ concatenation in WriteString") count as issues to fix too.
   frames are gone. A glr error is emitted as an `Error` event and
   `Execute` returns `kernel.ErrFailed`; the UI and runner stop a run of all
   cells there, since later cells build on the state.
+- Shared frames (`frames.go`): before a cell, the Go frames it mentions
+  that glr hasn't seen are staged with the host's `op=import`; after it,
+  `op=frames` lists the frames with generation numbers, and changed named
+  frames (and the focus, as `kernel.FocusName`) are recorded in
+  `kernel.Frames`. `ExportFrame` (`op=export`) writes one for a Go cell. A
+  host without the ops (an older golars) turns sharing off with one note.
+  Keep the ops in sync with golars' `cmd/golars/kernel_frames.go`.
 - `%export NAME` / `%import NAME` lines become `save`/`load ... as NAME` of
   `NAME.arrow` in `kernel.Kernel.BridgeDir()`, which Go cells reach with
   `nb.BridgePath` (env `GOPYTER_BRIDGE_DIR`). glr paths can't contain
@@ -221,7 +228,26 @@ concatenation in WriteString") count as issues to fix too.
   never import golars there.
 - `GOLARS_DIR` adds a `replace` for golars to the workspace `go.mod` and
   merges golars' `go.sum`, so cells import golars offline from the module
-  cache (`linkGolars`).
+  cache (`linkGolars`). Without it, a failure to fetch golars ends with
+  what to set (`golarsHint`).
+- Shared frames (`frames.go`, `frames_go.go`): `Frames` is the registry
+  of frame names with the version each language holds; files are
+  `<hex name>.arrow` in `Frames.Dir` (`GOPYTER_FRAMES_DIR`). A hoisted
+  variable whose type is golars' `*dataframe.DataFrame` (`isFrameType`,
+  aliases included) has `VarInfo.Frame` set: it's loaded with
+  `gopyterLoadFrame` and saved with `gopyterSaveFrame` from the generated
+  `gopyter_frames.go` (only written when such variables exist, since it
+  imports golars) instead of gob. Only frames the cell or a declaration
+  mentions are read (`framesUsed`, identifiers found with `go/scanner`),
+  and a frame is written only when the variable holds another pointer
+  than the one loaded (golars frames are immutable). The program reports
+  saved frames in `status.json`; `frameStatus` records them and prints the
+  status line. `pullFrames` exports glr frames a cell mentions and
+  declares new ones (`frameDecl`, cell ID `gopyter:frames`); a name that
+  is already a non-frame declaration, an import or not a Go identifier is
+  refused with a one-time note. Completion declares glr frames Go hasn't
+  read (`PendingForGo`), and `Model.glrBefore` starts golars-lsp's
+  document with a `load` of each Go frame.
 
 ### UI (`internal/ui`)
 

@@ -271,15 +271,27 @@ need the `golars` binary: `$GOLARS_BIN`, next to the gopyter binary, or on
 - **Go cells with golars** import `github.com/Gaurav-Gosain/golars`. A trailing
   DataFrame or Series, or `nb.Display(df)`, is drawn as a table and saved as
   `text/html` (golars' `MimeBundle` method). Set `GOLARS_DIR` to a golars
-  checkout to build against it offline. DataFrames don't carry over as `:=`
-  variables; declare them as top-level `var`s (recomputed per cell).
-- **Moving frames.** In a glr cell, `%export NAME` saves the focused frame and
+  checkout to build against it offline. A DataFrame declared with `:=`
+  carries over to later cells (as Arrow IPC); so do Series and frames inside
+  other values (gob). A LazyFrame doesn't: keep `lf.Collect(ctx)`, or declare
+  the plan as a top-level `var` (recomputed per cell).
+- **Shared frames, no commands.** A Go `:=` variable holding a DataFrame is a
+  glr frame of the same name (`use df`, `join df on id`), and a named glr
+  frame (`load PATH as NAME`, `stash NAME`) is a Go variable `NAME` of type
+  `*dataframe.DataFrame`; the frame the last glr cell ended on is `glr`. A
+  frame is copied only when a cell of the other language mentions it and it
+  changed. The last cell that changes a name wins. Each cell prints a line
+  like `frames read from glr: big (6 x 7); shared with glr: lines (14 x 10)`.
+  A glr frame whose name Go already uses for something else (or a Go import
+  or keyword) stays glr-only, with a note: pick another name.
+- **Explicit files.** In a glr cell, `%export NAME` saves the focused frame and
   `%import NAME` loads one as the named frame `NAME`. In Go,
   `golars.ReadIPC(nb.BridgePath("NAME"))` and
   `golars.WriteIPC(df, nb.BridgePath("NAME"))` read and write the same Arrow
   IPC files, in the kernel workspace.
 
-See `examples/golars.ipynb` and `examples/golars-go.ipynb`.
+See `examples/golars.ipynb`, `examples/golars-mixed.ipynb` (glr and Go
+sharing frames) and `examples/golars-go.ipynb`.
 
 ## TUI quick reference (for telling users)
 
