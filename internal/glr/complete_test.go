@@ -43,6 +43,8 @@ func TestDocMapping(t *testing.T) {
 		mk(4, 0, 2, "last line"),
 		mk(3, 7, 1, "unknown column"),
 		mk(9, 0, 1, "past the end"),
+		// Other cells, Go ones too, may use a stash.
+		mk(3, 0, 2, `stash "big" is never used (use it with use, join or join_asof, or remove the stash)`),
 	})
 	if len(diags) != 2 {
 		t.Fatalf("diags %+v", diags)
@@ -52,6 +54,13 @@ func TestDocMapping(t *testing.T) {
 	}
 	if d := diags[1]; d.Row != 2 || d.Error {
 		t.Fatalf("diag %+v", d)
+	}
+}
+
+func TestBasicCompletionFrames(t *testing.T) {
+	res := basic(complete.Request{Src: "use d", Row: 0, Col: 5, Frames: []string{"df", "big"}})
+	if len(res.Items) == 0 || res.Items[0].Label != "df" || res.Items[0].Kind != complete.KindVar {
+		t.Fatalf("items %+v", res.Items)
 	}
 }
 

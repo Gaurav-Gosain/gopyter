@@ -208,6 +208,10 @@ func (d Doc) CellDiagnostics(src string, diags []lspDiagnostic) []Diagnostic {
 		if row < 0 || row >= len(lines) {
 			continue
 		}
+		if strings.HasPrefix(x.Message, "stash ") && strings.Contains(x.Message, "is never used") {
+			// Later cells, in either language, may use it.
+			continue
+		}
 		col := utf8.RuneCountInString(lines[row][:utf16ToByte(lines[row], x.Range.Start.Character)])
 		out = append(out, Diagnostic{Row: row, Col: col, Message: x.Message, Error: x.Severity == 1 || x.Severity == 0})
 	}
