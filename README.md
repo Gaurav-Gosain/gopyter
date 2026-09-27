@@ -62,8 +62,8 @@ also reads well in JupyterLab.
   the same for one cell. The cell's border shows its language.
 - **Editing glr.** Syntax highlighting, and with `golars-lsp`: completion of
   commands, frames and the columns of files earlier cells loaded, docs on
-  `alt+k`, and diagnostics under the cell. Without it, commands still
-  complete.
+  `alt+k`, and diagnostics under the cell. Without it, commands, keywords
+  and expression functions (`dt.year`, `x.round`) still complete.
 - **golars in Go cells.** `import "github.com/Gaurav-Gosain/golars"`: a
   trailing DataFrame or Series (or `nb.Display(df)`) is drawn as a table and
   saved as `text/html`. Set `GOLARS_DIR=/path/to/golars` to build against a

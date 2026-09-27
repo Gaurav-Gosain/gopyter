@@ -260,7 +260,11 @@ need the `golars` binary: `$GOLARS_BIN`, next to the gopyter binary, or on
 - **glr cells** are one command per line: `load orders.csv`, `filter qty > 1
   and discount is_not_null`, `with revenue = unit_price * qty`, `groupby
   region revenue:sum:total`, `sort total desc`, `join customers on customer`,
-  `select a b c`, `stash NAME` / `use NAME`, `head 5`, `show`. A cell that
+  `select a b c`, `stash NAME` / `use NAME`, `head 5`, `show`. Expressions
+  call golars functions by snake_case name, as methods or functions
+  (`ts.dt.year()` or `dt.year(ts)`, `x.round(2)`), with lists, keyword
+  arguments, `//`, `%`, `**`, `in [...]` and `when ... then ... otherwise`.
+  See golars' docs/scripting.md for the full language. A cell that
   changes the focused frame displays it as a table. Relative paths resolve in
   the notebook's directory. Errors look like `In[n]:line: message`, and a
   failing glr cell stops `gopyter run`.
