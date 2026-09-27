@@ -455,7 +455,7 @@ index 0000000..a93567e
 +	}
 +}
 diff --git a/jupyter/render/render.go b/jupyter/render/render.go
-index bc1bdb9..38e1267 100644
+index 674c87a..4442ba1 100644
 --- a/jupyter/render/render.go
 +++ b/jupyter/render/render.go
 @@ -19,7 +19,6 @@ package render

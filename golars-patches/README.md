@@ -1,8 +1,9 @@
 # golars patches
 
 Changes to [golars](https://github.com/Gaurav-Gosain/golars) that gopyter's
-golars support uses. They are written against golars `ffe73a0` and apply in
-order:
+golars support uses. They were made against golars `ffe73a0` with the
+reorganized `cmd/golars` (dispatch, `cmds_*.go`) that was in the working tree
+on 2026-09-27, and apply in order:
 
 ```sh
 cd /path/to/golars

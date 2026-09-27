@@ -226,7 +226,8 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Errors != `In[2]:2: unknown command "frob"` {
+	// Newer golars versions add a suggestion after the message.
+	if !strings.HasPrefix(r.Errors, `In[2]:2: unknown command "frob"`) || strings.Contains(r.Errors, "\n") {
 		t.Fatalf("errors %q", r.Errors)
 	}
 	if r, err := k.Check(context.Background(), "", "In[1]", "load a.csv\n%export a"); err != nil || !r.OK() {
