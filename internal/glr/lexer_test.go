@@ -101,3 +101,85 @@ func TestLexerRegistered(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestLexerExpressions(t *testing.T) {
+	src := `with y = dt.year(ts) // 2 ** 3 % 7
+with n = name.str.to_uppercase()
+select a, b = cut(x, [0, 10], labels=['lo', "hi"], left_closed=true)
+filter k not in [1, 2] and v == null
+with p = when a > 1 then 'big' otherwise x.round(2)
+join_asof quotes on ts by sym backward tolerance 2m
+groupby_dynamic ts every 1h n=amount.count()
+to_dummies dept
+`
+	want := []struct {
+		value string
+		typ   chroma.TokenType
+	}{
+		{"with", chroma.Keyword}, {"y", chroma.Name}, {"=", chroma.Operator},
+		{"dt", chroma.NameNamespace}, {".", chroma.Punctuation}, {"year", chroma.NameFunction},
+		{"(", chroma.Punctuation}, {"ts", chroma.Name}, {")", chroma.Punctuation},
+		{"//", chroma.Operator}, {"2", chroma.LiteralNumber}, {"**", chroma.Operator},
+		{"3", chroma.LiteralNumber}, {"%", chroma.Operator}, {"7", chroma.LiteralNumber},
+
+		{"with", chroma.Keyword}, {"n", chroma.Name}, {"=", chroma.Operator},
+		{"name", chroma.Name}, {".", chroma.Punctuation}, {"str", chroma.NameNamespace},
+		{".", chroma.Punctuation}, {"to_uppercase", chroma.NameFunction}, {"()", chroma.Punctuation},
+
+		{"select", chroma.Keyword}, {"a", chroma.Name}, {",", chroma.Punctuation},
+		{"b", chroma.Name}, {"=", chroma.Operator}, {"cut", chroma.NameFunction},
+		{"(", chroma.Punctuation}, {"x", chroma.Name}, {",", chroma.Punctuation},
+		{"[", chroma.Punctuation}, {"0", chroma.LiteralNumber}, {",", chroma.Punctuation},
+		{"10", chroma.LiteralNumber}, {"],", chroma.Punctuation}, {"labels", chroma.NameAttribute},
+		{"=", chroma.Operator}, {"[", chroma.Punctuation}, {"'lo'", chroma.LiteralString},
+		{",", chroma.Punctuation}, {`"hi"`, chroma.LiteralString}, {"],", chroma.Punctuation},
+		{"left_closed", chroma.NameAttribute}, {"=", chroma.Operator}, {"true", chroma.KeywordConstant},
+		{")", chroma.Punctuation},
+
+		{"filter", chroma.Keyword}, {"k", chroma.Name}, {"not", chroma.KeywordReserved},
+		{"in", chroma.KeywordReserved}, {"[", chroma.Punctuation}, {"1", chroma.LiteralNumber},
+		{",", chroma.Punctuation}, {"2", chroma.LiteralNumber}, {"]", chroma.Punctuation},
+		{"and", chroma.KeywordReserved}, {"v", chroma.Name}, {"==", chroma.Operator},
+		{"null", chroma.KeywordConstant},
+
+		{"with", chroma.Keyword}, {"p", chroma.Name}, {"=", chroma.Operator},
+		{"when", chroma.KeywordReserved}, {"a", chroma.Name}, {">", chroma.Operator},
+		{"1", chroma.LiteralNumber}, {"then", chroma.KeywordReserved}, {"'big'", chroma.LiteralString},
+		{"otherwise", chroma.KeywordReserved}, {"x", chroma.Name}, {".", chroma.Punctuation},
+		{"round", chroma.NameFunction}, {"(", chroma.Punctuation}, {"2", chroma.LiteralNumber},
+		{")", chroma.Punctuation},
+
+		{"join_asof", chroma.Keyword}, {"quotes", chroma.Name}, {"on", chroma.KeywordReserved},
+		{"ts", chroma.Name}, {"by", chroma.KeywordReserved}, {"sym", chroma.Name},
+		{"backward", chroma.KeywordReserved}, {"tolerance", chroma.KeywordReserved}, {"2m", chroma.LiteralNumber},
+
+		{"groupby_dynamic", chroma.Keyword}, {"ts", chroma.Name}, {"every", chroma.KeywordReserved},
+		{"1h", chroma.LiteralNumber}, {"n", chroma.Name}, {"=", chroma.Operator},
+		{"amount", chroma.Name}, {".", chroma.Punctuation}, {"count", chroma.NameFunction},
+		{"()", chroma.Punctuation},
+
+		{"to_dummies", chroma.Keyword}, {"dept", chroma.Name},
+	}
+	got := tokens(t, src)
+	for i, w := range want {
+		if i >= len(got) {
+			t.Fatalf("missing tokens from %d (%q)", i, w.value)
+		}
+		g := got[i]
+		if strings.TrimSpace(g.Value) != w.value || g.Type != w.typ {
+			t.Fatalf("token %d: got %q %s, want %q %s", i, g.Value, g.Type, w.value, w.typ)
+		}
+	}
+}
+
+// Every command and alias starts a statement as a keyword.
+func TestLexerCommands(t *testing.T) {
+	for _, c := range Commands {
+		for _, name := range append([]string{c.Name}, c.Aliases...) {
+			got := tokens(t, name+" x\n")
+			if len(got) == 0 || got[0].Value != name || got[0].Type != chroma.Keyword {
+				t.Errorf("%q: %+v", name, got)
+			}
+		}
+	}
+}
