@@ -27,6 +27,13 @@ const (
 
 func (m *Model) viewHeight() int { return max(m.height-headerHeight-footerHeight, 1) }
 
+// outWidth is the width a cell's outputs are drawn at: the cell's box
+// minus its borders (renderCell). Shell commands run in a terminal of
+// this width, so programs wrap where the output is shown.
+func (m *Model) outWidth() int {
+	return m.width - 1 - cellMarginR - gutterWidth - 2
+}
+
 func (m *Model) View() tea.View {
 	var v tea.View
 	v.AltScreen = true

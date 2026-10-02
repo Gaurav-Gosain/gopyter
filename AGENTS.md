@@ -144,6 +144,14 @@ concatenation in WriteString") count as issues to fix too.
   (`%%writefile`, `%%bash`...) must be the first line and make the whole
   cell a command. `%test` cells build `main_test.go` with `go test -c`;
   only one of `main.go`/`main_test.go` may exist.
+- Shell commands (`runShell`, `shell.go`) run in a pseudo-terminal when the
+  front end asks for one (`SetTerminal`, which the UI calls with `outWidth`),
+  so their colors, progress bars and spinners survive; `internal/ui/termout.go`
+  replays them. `gopyter run` doesn't, so its output stays plain. Standard
+  input stays the UI's pipe (`shell.go` says why), both output streams become
+  the terminal's one stream, and the terminal's CRLFs are dropped
+  (`pumpTerminal`). Keep the environment handling (`shellEnv`) filling in only
+  what is missing, and `NO_COLOR` winning.
 - `ExecuteInput` takes the program's `Input` (stdin and widget events).
   The UI feeds both from pipes (`input.go`): the input line under the
   running cell, the widgets drawn in its HTML outputs (`Cell.outWidgets`,

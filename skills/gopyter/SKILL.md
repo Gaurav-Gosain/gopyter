@@ -108,7 +108,7 @@ first line and takes the rest of the cell.
 
 | Command | Effect |
 |---|---|
-| `!cmd` | shell command in the kernel workspace (`!go get pkg@v1`); a trailing `\` continues the line |
+| `!cmd` | shell command in the kernel workspace (`!go get pkg@v1`); a trailing `\` continues the line; it runs in a terminal in the TUI, so colors and progress output are shown |
 | `%%writefile [-a] path` | write the rest of the cell to a file |
 | `%%sh` / `%%bash` / `%%script cmd` | run the rest of the cell as a script |
 | `%env K=V`, `%args a b` | environment variables / program arguments |

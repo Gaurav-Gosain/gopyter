@@ -894,6 +894,10 @@ func (m *Model) startNext() tea.Cmd {
 		// The program's stdin and widget events are pipes fed by the UI.
 		rs.session = htmlview.NewSession()
 		in, closeIn := m.startInput()
+		// Shell commands of the cell run in a terminal as wide as its
+		// output, so programs colorize and redraw as they would in a
+		// terminal.
+		m.k.SetTerminal(m.outWidth())
 		go func() {
 			rs.err = m.k.ExecuteInput(ctx, c.id, name, src, in, func(e kernel.Event) { rs.ch <- e })
 			closeIn()

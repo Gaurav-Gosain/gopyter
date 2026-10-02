@@ -163,7 +163,7 @@ same way:
 
 | Cell command     | Effect                                        |
 |------------------|-----------------------------------------------|
-| `!cmd`           | run a shell command in the kernel workspace (e.g. `!go get pkg@v1`); a trailing `\` continues it |
+| `!cmd`           | run a shell command in the kernel workspace (e.g. `!go get pkg@v1`); a trailing `\` continues it; it runs in a terminal, so its output keeps colors, progress bars and spinners (see below) |
 | `%reset`         | forget all declarations and saved variables   |
 | `%reset go.mod`  | start the workspace's `go.mod` over           |
 | `%env K=V`       | set environment variables for your programs   |
@@ -195,6 +195,23 @@ can read what `%%writefile` wrote. Commands can also be written as
 `//gonb:%...`, and `!*cmd` is accepted like `!cmd`, so GoNB notebooks run
 unchanged. Each cell can have its own `func init()`; GoNB's `init_xxx()`
 functions work too.
+
+### Shell commands in a terminal
+
+Shell commands (`!cmd`, `%%bash`, `%%script`) run in a pseudo-terminal as wide
+as the cell's output, so they see the terminal a command expects: they colorize
+their output and draw progress bars and spinners, and gopyter replays that while
+the command runs. crush's bang mode
+([same idea](https://github.com/charmbracelet/crush)) asks for color with the
+environment alone; a real terminal also gives the cursor movement and erasing
+that redraws need. The terminal's own line endings don't reach the output, and
+what a command writes to stderr comes out on the same stream as its stdout, as
+in a terminal. gopyter only fills in what the environment is missing, so `TERM`,
+`COLORTERM` or `FORCE_COLOR` that you set are kept, and `NO_COLOR` turns the
+color off.
+
+This is for the terminal UI. `gopyter run` writes to a file or a pipe, so its
+shell commands keep plain pipes and no escape codes reach its output.
 
 ## Widgets and GoNB notebooks
 

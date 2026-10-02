@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -158,5 +161,47 @@ func TestStdinInput(t *testing.T) {
 	}
 	if m.stdinCell(c) || strings.Contains(ansi.Strip(m.View().Content), "stdin ❯") {
 		t.Fatal("input line shown after the run")
+	}
+}
+
+// TestShellTerminal checks that a shell command of a cell runs in a
+// terminal as wide as the cell's output, so its output is the ANSI a
+// program writes for a terminal.
+func TestShellTerminal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no pseudo-terminal on Windows: shell output stays on pipes")
+	}
+	if _, err := exec.LookPath("tput"); err != nil {
+		t.Skip("tput is not installed")
+	}
+	k, err := kernel.New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := k.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	src := "![ -t 1 ] && echo tty || echo pipe\n!tput cols"
+	nb := &notebook.Notebook{Cells: []*notebook.Cell{{ID: "a", Type: notebook.Code, Source: src}}}
+	m := New(Options{Notebook: nb, Kernel: k})
+	m.width, m.height = 100, 40
+	m.queue = []string{"a"}
+	cmd := m.startNext()
+	for m.running != nil {
+		msg, ok := cmd().(runEventsMsg)
+		if !ok {
+			t.Fatal("unexpected message")
+		}
+		cmd = m.handleRunEvents(msg)
+	}
+	c := m.cells[0]
+	if c.status != statusOK {
+		t.Fatalf("status %v: %+v", c.status, c.outputs)
+	}
+	want := fmt.Sprintf("tty\n%d", m.outWidth())
+	if out := plainOutput(c); out != want {
+		t.Fatalf("output %q, want %q", out, want)
 	}
 }
