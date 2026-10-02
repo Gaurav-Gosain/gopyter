@@ -15,33 +15,34 @@ type keyMap struct {
 	Input      key.Binding // focus the running program's input
 
 	// Command mode
-	Up, Down     key.Binding
-	Top, Bottom  key.Binding
-	PageUp       key.Binding
-	PageDown     key.Binding
-	Edit         key.Binding
-	InsertAbove  key.Binding
-	InsertBelow  key.Binding
-	Delete       key.Binding
-	Undelete     key.Binding
-	Cut          key.Binding
-	Copy         key.Binding
-	Paste        key.Binding
-	MoveUp       key.Binding
-	MoveDown     key.Binding
-	ToMarkdown   key.Binding
-	ToCode       key.Binding
-	ToggleOutput key.Binding
-	ClearOutput  key.Binding
-	RunAll       key.Binding
-	Restart      key.Binding
-	Help         key.Binding
-	Theme        key.Binding
-	ToggleVim    key.Binding
-	Fix          key.Binding
-	Ask          key.Binding
-	AIModel      key.Binding
-	Quit         key.Binding
+	Up, Down       key.Binding
+	Top, Bottom    key.Binding
+	PageUp         key.Binding
+	PageDown       key.Binding
+	Edit           key.Binding
+	InsertAbove    key.Binding
+	InsertBelow    key.Binding
+	Delete         key.Binding
+	Undelete       key.Binding
+	Cut            key.Binding
+	Copy           key.Binding
+	Paste          key.Binding
+	MoveUp         key.Binding
+	MoveDown       key.Binding
+	ToMarkdown     key.Binding
+	ToCode         key.Binding
+	ToggleOutput   key.Binding
+	ClearOutput    key.Binding
+	ClearAllOutput key.Binding
+	RunAll         key.Binding
+	Restart        key.Binding
+	Help           key.Binding
+	Theme          key.Binding
+	ToggleVim      key.Binding
+	Fix            key.Binding
+	Ask            key.Binding
+	AIModel        key.Binding
+	Quit           key.Binding
 
 	// Edit mode
 	Escape key.Binding
@@ -63,35 +64,36 @@ func newKeyMap() keyMap {
 		Input:      b([]string{"alt+i"}, "alt+i", "input line"),
 		// Widgets: enter on the running cell focuses them, ⇥ moves.
 
-		Up:           b([]string{"up", "k"}, "↑/k", "up"),
-		Down:         b([]string{"down", "j"}, "↓/j", "down"),
-		Top:          b([]string{"g", "home"}, "g", "first cell"),
-		Bottom:       b([]string{"G", "end"}, "G", "last cell"),
-		PageUp:       b([]string{"pgup", "ctrl+u"}, "pgup", "page up"),
-		PageDown:     b([]string{"pgdown", "ctrl+d"}, "pgdn", "page down"),
-		Edit:         b([]string{"enter", "i"}, "↵", "edit"),
-		InsertAbove:  b([]string{"a"}, "a", "insert above"),
-		InsertBelow:  b([]string{"b"}, "b", "insert below"),
-		Delete:       b([]string{"d"}, "dd", "delete"),
-		Undelete:     b([]string{"z", "u"}, "z", "undo delete"),
-		Cut:          b([]string{"x"}, "x", "cut"),
-		Copy:         b([]string{"c"}, "c", "copy"),
-		Paste:        b([]string{"v", "p"}, "v", "paste below"),
-		MoveUp:       b([]string{"K", "shift+up"}, "K", "move up"),
-		MoveDown:     b([]string{"J", "shift+down"}, "J", "move down"),
-		ToMarkdown:   b([]string{"m"}, "m", "to markdown"),
-		ToCode:       b([]string{"y"}, "y", "to code"),
-		ToggleOutput: b([]string{"o"}, "o", "fold output"),
-		ClearOutput:  b([]string{"O"}, "O", "clear output"),
-		RunAll:       b([]string{"A"}, "A", "run all"),
-		Restart:      b([]string{"R"}, "R", "restart kernel"),
-		Help:         b([]string{"?"}, "?", "help"),
-		Theme:        b([]string{"T"}, "T", "color theme"),
-		ToggleVim:    b([]string{"V"}, "V", "vim keys on/off"),
-		Fix:          b([]string{"f"}, "f", "AI fix error"),
-		Ask:          b([]string{"e"}, "e", "ask AI to edit"),
-		AIModel:      b([]string{"M"}, "M", "AI model / on-off"),
-		Quit:         b([]string{"q"}, "q", "quit"),
+		Up:             b([]string{"up", "k"}, "↑/k", "up"),
+		Down:           b([]string{"down", "j"}, "↓/j", "down"),
+		Top:            b([]string{"g", "home"}, "g", "first cell"),
+		Bottom:         b([]string{"G", "end"}, "G", "last cell"),
+		PageUp:         b([]string{"pgup", "ctrl+u"}, "pgup", "page up"),
+		PageDown:       b([]string{"pgdown", "ctrl+d"}, "pgdn", "page down"),
+		Edit:           b([]string{"enter", "i"}, "↵", "edit"),
+		InsertAbove:    b([]string{"a"}, "a", "insert above"),
+		InsertBelow:    b([]string{"b"}, "b", "insert below"),
+		Delete:         b([]string{"d"}, "dd", "delete"),
+		Undelete:       b([]string{"z", "u"}, "z", "undo delete"),
+		Cut:            b([]string{"x"}, "x", "cut"),
+		Copy:           b([]string{"c"}, "c", "copy"),
+		Paste:          b([]string{"v", "p"}, "v", "paste below"),
+		MoveUp:         b([]string{"K", "shift+up"}, "K", "move up"),
+		MoveDown:       b([]string{"J", "shift+down"}, "J", "move down"),
+		ToMarkdown:     b([]string{"m"}, "m", "to markdown"),
+		ToCode:         b([]string{"y"}, "y", "to code"),
+		ToggleOutput:   b([]string{"o"}, "o", "fold output"),
+		ClearOutput:    b([]string{"O"}, "O", "clear output"),
+		ClearAllOutput: b([]string{"D"}, "D", "clear all outputs"),
+		RunAll:         b([]string{"A"}, "A", "run all"),
+		Restart:        b([]string{"R"}, "R", "restart kernel"),
+		Help:           b([]string{"?"}, "?", "help"),
+		Theme:          b([]string{"T"}, "T", "color theme"),
+		ToggleVim:      b([]string{"V"}, "V", "vim keys on/off"),
+		Fix:            b([]string{"f"}, "f", "AI fix error"),
+		Ask:            b([]string{"e"}, "e", "ask AI to edit"),
+		AIModel:        b([]string{"M"}, "M", "AI model / on-off"),
+		Quit:           b([]string{"q"}, "q", "quit"),
 
 		Escape: b([]string{"esc"}, "esc", "command mode"),
 		Undo:   b([]string{"ctrl+z"}, "^z", "undo"),
@@ -199,7 +201,7 @@ func (k keyMap) baseHelp() []helpSection {
 		}},
 		{"Navigation", []key.Binding{k.Up, k.Down, k.Top, k.Bottom, k.PageUp, k.PageDown, k.Edit, k.Escape}},
 		{"Cells", []key.Binding{k.InsertAbove, k.InsertBelow, k.Delete, k.Undelete, k.Cut, k.Copy, k.Paste, k.MoveUp, k.MoveDown}},
-		{"Misc", []key.Binding{k.ToMarkdown, k.ToCode, k.ToggleOutput, k.ClearOutput, k.Save, k.Theme, k.ToggleVim, k.Help, k.Quit}},
+		{"Misc", []key.Binding{k.ToMarkdown, k.ToCode, k.ToggleOutput, k.ClearOutput, k.ClearAllOutput, k.Save, k.Theme, k.ToggleVim, k.Help, k.Quit}},
 		{"Editing", []key.Binding{
 			k.Undo, k.Redo,
 			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("⇧+move", "select")),

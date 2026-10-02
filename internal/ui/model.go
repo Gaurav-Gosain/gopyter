@@ -746,12 +746,9 @@ func (m *Model) handleCommandKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.ToggleOutput):
 		m.cur().expanded = !m.cur().expanded
 	case key.Matches(msg, k.ClearOutput):
-		c := m.cur()
-		if c.status != statusRunning {
-			c.outputs, c.status, c.count = nil, statusIdle, 0
-			c.outRev++
-			m.dirty = true
-		}
+		m.clearCellOutput(m.cur())
+	case key.Matches(msg, k.ClearAllOutput):
+		return m.clearAllOutputs()
 	case key.Matches(msg, k.RunAll):
 		return m.runAll()
 	case key.Matches(msg, k.Restart):
@@ -1000,6 +997,51 @@ func (m *Model) handleRunEvents(msg runEventsMsg) tea.Cmd {
 		}
 	}
 	return m.startNext()
+}
+
+// clearCellOutput drops one cell's output, its run count and its status,
+// leaving the source alone. A running cell keeps them: its program is still
+// writing to it.
+func (m *Model) clearCellOutput(c *Cell) {
+	if c.status == statusRunning {
+		return
+	}
+	c.outputs, c.status, c.count = nil, statusIdle, 0
+	c.outRev++
+	m.dirty = true
+}
+
+// clearAllOutputs clears the output of every cell, like Jupyter's "Clear
+// Outputs". Cells that are still running keep theirs. It reports how many
+// cells were cleared.
+func (m *Model) clearAllOutputs() tea.Cmd {
+	n := 0
+	for _, c := range m.cells {
+		if c.status == statusRunning {
+			continue
+		}
+		if len(c.outputs) == 0 && c.count == 0 {
+			continue
+		}
+		m.clearCellOutput(c)
+		n++
+	}
+	if n == 0 {
+		return nil
+	}
+	return m.setStatus(statusInfo, "outputs cleared · %d cells", n)
+}
+
+// hasOutputs reports whether any idle cell holds output or a run count, so
+// the context menu only offers the clear actions when they would do
+// something.
+func (m *Model) hasOutputs() bool {
+	for _, c := range m.cells {
+		if c.status != statusRunning && (len(c.outputs) > 0 || c.count > 0) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) interrupt() tea.Cmd {

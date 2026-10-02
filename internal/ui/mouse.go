@@ -23,6 +23,7 @@ const (
 	actRunAll
 	actInterrupt
 	actRestart
+	actClearAllOutput
 	actSave
 	actHelp
 	actTheme
@@ -553,6 +554,9 @@ func (m *Model) openContextMenu(x, y int) tea.Cmd {
 	} else {
 		items = append(items, menuItem{label: "Convert to code", key: "y", act: a(actToCode)})
 	}
+	if m.hasOutputs() {
+		items = append(items, menuItem{label: "Clear all outputs", key: "D", act: a(actClearAllOutput)})
+	}
 	items = append(items,
 		menuItem{sep: true},
 		menuItem{label: "Delete cell", key: "dd", act: a(actDeleteCell), danger: true})
@@ -618,6 +622,8 @@ func (m *Model) doAction(a action) tea.Cmd {
 		}
 	case actRestart:
 		return m.restart()
+	case actClearAllOutput:
+		return m.clearAllOutputs()
 	case actSave:
 		return m.saveCmd()
 	case actHelp:

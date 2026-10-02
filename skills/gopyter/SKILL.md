@@ -236,5 +236,6 @@ changes, gopyter asks them which version to keep.
 `enter`/`esc` switch between edit and command mode. `ctrl+r` (or
 `shift+enter`) runs the cell and moves to the next one; `A` runs all cells.
 `a`/`b` insert a cell above/below, `m`/`y` convert to markdown/code, `dd`
-deletes, `ctrl+s` saves, `q` quits, and `?` lists every key. `V` toggles vim
-bindings and `T` picks a theme.
+deletes, `O`/`D` clear the selected cell's output / every output, `ctrl+s`
+saves, `q` quits, and `?` lists every key. `V` toggles vim bindings and `T`
+picks a theme.

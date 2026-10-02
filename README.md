@@ -265,6 +265,7 @@ mode** (green) edits text. Press `?` for the full list.
 | `x` `c` `v`, `K` / `J`       | cut / copy / paste, move cell up / down  |
 | `m` / `y` (`ctrl+t` editing) | convert to markdown / code               |
 | `o` / `O`                    | fold long output / clear output          |
+| `D`                          | clear every cell's output                |
 | `ctrl+s` / `q`               | save / quit                              |
 | `T`                          | pick a color theme                       |
 | `V`                          | turn vim bindings on / off (saved)       |
