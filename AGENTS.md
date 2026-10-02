@@ -324,6 +324,12 @@ concatenation in WriteString") count as issues to fix too.
   it. Asset names, supported platforms and `.goreleaser.yaml` must agree;
   `scripts/install_test.go` enforces this. When changing either, run
   `go test ./scripts/`.
+- `flake.nix` builds from source (Nix does not install release binaries), so
+  it needs its own `vendorHash` and `nixpkgs` pin whenever dependencies
+  change: set a placeholder hash, build, and copy the hash Nix reports. It
+  uses `buildGoLatestModule`, not `buildGoModule`, because nixpkgs' default
+  `go` is a release behind gopyter's `go.mod`. Keep `packages.<system>` in step
+  with the `goos`/`goarch` lists in `.goreleaser.yaml`.
 - Check release config changes locally with `goreleaser check` and
   `goreleaser release --snapshot --clean` (output goes to the ignored
   `dist/`).

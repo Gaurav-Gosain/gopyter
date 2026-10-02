@@ -32,10 +32,22 @@ The script installs a checksum-verified release binary for Linux or macOS
 go install github.com/mark3labs/gopyter@latest
 ```
 
+With [Nix](https://nixos.org/download), the flake builds gopyter from source and
+installs it into your profile:
+
+```sh
+nix profile install github:mark3labs/gopyter
+```
+
+The flake covers Linux and Apple silicon macOS; Intel Macs are served by the two
+commands above, since nixpkgs no longer supports them.
+
 **Requirements:** the [Go toolchain](https://go.dev/dl/) on your `PATH`, since
 cells are compiled with it. For completion and symbol info, install
 `go install golang.org/x/tools/gopls@latest` (without it, gopyter falls back to
-basic completion).
+basic completion). The Go toolchain is *not* part of the Nix closure: cells are
+compiled with whatever `go` is on your `PATH`, so install Go from Nix too if the
+profile is all you have.
 
 ### Agent skill
 

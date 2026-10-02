@@ -1,3 +1,6 @@
 /gopyter
 *.ipynb.tmp
 dist/
+# `nix build` symlink
+/result
+/result-*
