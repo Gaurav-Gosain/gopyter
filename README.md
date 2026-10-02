@@ -123,15 +123,12 @@ how to switch languages and share frames.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Gaurav-Gosain/gopyter/master/install.sh | bash
+go install github.com/Gaurav-Gosain/gopyter@golars
 ```
 
-The script installs a checksum-verified release binary for Linux or macOS
-(amd64/arm64). Alternatively:
-
-```sh
-go install github.com/Gaurav-Gosain/gopyter@latest
-```
+This fork has no release yet. Until it has one, install from the `golars`
+branch as above. `@latest` and `install.sh` resolve to upstream's releases,
+which do not include golars support.
 
 **Requirements:** the [Go toolchain](https://go.dev/dl/) on your `PATH`, since
 cells are compiled with it. For completion and symbol info, install
