@@ -127,8 +127,8 @@ go install github.com/Gaurav-Gosain/gopyter@golars
 ```
 
 This fork has no release yet. Until it has one, install from the `golars`
-branch as above. `@latest` and `install.sh` resolve to upstream's releases,
-which do not include golars support.
+branch as above. `@latest` and `install.sh` do not work before the first
+release.
 
 **Requirements:** the [Go toolchain](https://go.dev/dl/) on your `PATH`, since
 cells are compiled with it. For completion and symbol info, install
