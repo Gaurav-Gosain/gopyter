@@ -1,6 +1,7 @@
 /gopyter
 *.ipynb.tmp
 dist/
-# `nix build` symlink
-/result
-/result-*
+# `nix build` leaves a result symlink, and flake.lock is not committed on
+# purpose (see the comment in flake.nix).
+result*
+/flake.lock

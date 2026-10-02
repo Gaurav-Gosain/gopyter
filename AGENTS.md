@@ -324,12 +324,18 @@ concatenation in WriteString") count as issues to fix too.
   it. Asset names, supported platforms and `.goreleaser.yaml` must agree;
   `scripts/install_test.go` enforces this. When changing either, run
   `go test ./scripts/`.
-- `flake.nix` builds from source (Nix does not install release binaries), so
-  it needs its own `vendorHash` and `nixpkgs` pin whenever dependencies
-  change: set a placeholder hash, build, and copy the hash Nix reports. It
-  uses `buildGoLatestModule`, not `buildGoModule`, because nixpkgs' default
-  `go` is a release behind gopyter's `go.mod`. Keep `packages.<system>` in step
-  with the `goos`/`goarch` lists in `.goreleaser.yaml`.
+- `flake.nix` builds the **pinned release**, not master, so `nix profile install
+  github:mark3labs/gopyter` installs the newest tag. A flake input cannot say
+  "latest tag", so the pin is a tag that the `nix-release-pin` job in
+  `release.yml` bumps after every release, with two scripts:
+  `scripts/bump-flake-release-pin.sh vX.Y.Z` (move the pin) then
+  `scripts/update-flake-vendor-hash.sh` (recompute `vendorHash` for the new
+  release's module graph). Run them by hand when bumping the pin yourself.
+  `flake.lock` is not committed on purpose: an unlocked nixpkgs is what keeps a
+  recent enough Go as `go.mod` advances.
+- Keep `flake.nix`'s `systems` in step with the `goos`/`goarch` lists in
+  `.goreleaser.yaml`, except `x86_64-darwin`, which nixpkgs 26.11 no longer
+  supports.
 - Check release config changes locally with `goreleaser check` and
   `goreleaser release --snapshot --clean` (output goes to the ignored
   `dist/`).

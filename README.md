@@ -32,15 +32,17 @@ The script installs a checksum-verified release binary for Linux or macOS
 go install github.com/mark3labs/gopyter@latest
 ```
 
-With [Nix](https://nixos.org/download), the flake builds gopyter from source and
-installs it into your profile:
+With [Nix](https://nixos.org/download), the flake builds the **latest release**
+from source and installs it into your profile:
 
 ```sh
 nix profile install github:mark3labs/gopyter
 ```
 
-The flake covers Linux and Apple silicon macOS; Intel Macs are served by the two
-commands above, since nixpkgs no longer supports them.
+The pin to the newest tag moves automatically after every release; a flake input
+cannot say "latest tag", so `flake.nix` names one and the release workflow bumps
+it. Intel Macs are served by the two commands above, since nixpkgs no longer
+supports them.
 
 **Requirements:** the [Go toolchain](https://go.dev/dl/) on your `PATH`, since
 cells are compiled with it. For completion and symbol info, install
